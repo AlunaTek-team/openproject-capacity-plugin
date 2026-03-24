@@ -1,0 +1,128 @@
+<div class="capacity-dashboard">
+  <h1>Dashboard de Capacidad y Carga</h1>
+
+  <div class="row">
+    <div class="col-md-4">
+      <div class="card bg-primary text-white">
+        <div class="card-body">
+          <h5 class="card-title">Capacidad Total del Equipo</h5>
+          <p class="card-text h2" id="total-capacity">Calculando...</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card bg-info text-white">
+        <div class="card-body">
+          <h5 class="card-title">Carga de Trabajo Asignada</h5>
+          <p class="card-text h2" id="current-workload">Calculando...</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card bg-success text-white">
+        <div class="card-body">
+          <h5 class="card-title">Velocidad del Equipo (Media)</h5>
+          <p class="card-text h2" id="team-velocity">Calculando...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-4">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">Gráfica de Burn-down</div>
+        <div class="card-body">
+          <canvas id="burnDownChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">Carga de Trabajo por Miembro</div>
+        <div class="card-body">
+          <ul class="list-group list-group-flush" id="members-workload-list">
+            <!-- Dynamically populated -->
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    fetch('<%= capacity_management_data_path(project_id: @project.id, sprint_id: @sprint&.id) %>')
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('total-capacity').innerText = data.capacity + 'h';
+        document.getElementById('current-workload').innerText = data.workload + 'h';
+        document.getElementById('team-velocity').innerText = data.velocity + 'h';
+
+        const workloadList = document.getElementById('members-workload-list');
+        workloadList.innerHTML = '';
+        data.member_workload.forEach(m => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center';
+          const badgeClass = m.is_overloaded ? 'bg-danger' : 'bg-success';
+          li.innerHTML = `
+            <span>${m.user_name}</span>
+            <span class="badge ${badgeClass} rounded-pill">${m.workload}h / ${m.capacity}h (${m.percentage}%)</span>
+          `;
+          workloadList.appendChild(li);
+        });
+
+        const ctx = document.getElementById('burnDownChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.burn_down.labels,
+            datasets: [{
+              label: 'Ideal Burn',
+              data: data.burn_down.ideal,
+              borderColor: 'rgba(54, 162, 235, 1)',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              fill: false,
+              borderDash: [5, 5]
+            }, {
+              label: 'Actual Burn',
+              data: data.burn_down.actual,
+              borderColor: 'rgba(255, 99, 132, 1)',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              fill: true
+            }]
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Horas Restantes'
+                }
+              }
+            }
+          }
+        });
+      });
+  });
+</script>
+
+<style>
+  .capacity-dashboard {
+    padding: 20px;
+  }
+  .card {
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  .card-body {
+    padding: 20px;
+  }
+  .bg-primary { background-color: #007bff; }
+  .bg-info { background-color: #17a2b8; }
+  .bg-success { background-color: #28a745; }
+</style>
