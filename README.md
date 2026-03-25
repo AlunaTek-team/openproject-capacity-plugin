@@ -1,48 +1,80 @@
 # OpenProject Capacity Management Plugin
 
-Este plugin permite gestionar la capacidad del equipo, monitorear la carga de trabajo y visualizar el progreso mediante gráficas de burn-down.
+Plugin para gestionar la capacidad del equipo, monitorear la carga de trabajo y visualizar el progreso mediante graficas de burn-down.
 
-## Características
+## Caracteristicas
 
-- **Definición de Capacidad**: Campo personalizado para registrar las horas disponibles de cada miembro por sprint.
-- **Ajuste Automático**: Cálculo de capacidad ajustado según días laborables en el sprint.
-- **Monitoreo de Sobrecarga**: Identificación visual de miembros con exceso de trabajo asignado.
-- **Gráficas de Burn-down**: Visualización interactiva del progreso del sprint.
-- **Cálculo de Velocidad**: Media de horas completadas en sprints anteriores.
+- **Definicion de Capacidad**: Campo personalizado para registrar las horas disponibles de cada miembro por sprint.
+- **Ajuste Automatico**: Calculo de capacidad ajustado segun dias laborables en el sprint.
+- **Monitoreo de Sobrecarga**: Identificacion visual de miembros con exceso de trabajo asignado.
+- **Graficas de Burn-down**: Visualizacion interactiva del progreso del sprint.
+- **Calculo de Velocidad**: Media de horas completadas en sprints anteriores.
 
-## Instalación
+## Imagen Docker
 
-1.  Clona este repositorio en el directorio `plugins/` de tu instalación de OpenProject:
-    ```bash
-    cd /path/to/openproject/plugins
-    git clone https://github.com/luisavila/openproject-capacity_management.git capacity_management
-    ```
+La imagen se construye y publica automaticamente en GitHub Container Registry en cada push a `main`.
 
-2.  Instala las dependencias y ejecuta el setup de campos personalizados:
-    ```bash
-    cd /path/to/openproject
-    bundle install
-    RAILS_ENV=production bundle exec rake capacity_management:setup
-    ```
+```
+ghcr.io/alunatek-team/openproject-capacity-plugin:latest
+```
 
-3.  Reinicia tu servidor OpenProject.
+### Despliegue automatico
 
-## Configuración
+El workflow `.github/workflows/build.yml` se encarga de:
+1. Construir la imagen Docker con el plugin instalado
+2. Publicarla en `ghcr.io/alunatek-team/openproject-capacity-plugin`
+3. Etiquetarla con `latest` y el SHA del commit
 
-1.  **Campos Personalizados**: El plugin creará automáticamente los siguientes campos:
-    - `Member Capacity (Hours)` (en el perfil de Usuario).
-    - `Remaining Work (Hours)` (en los Paquetes de Trabajo).
-2.  **Sprints**: El plugin utiliza las `Versiones` de OpenProject para definir los sprints. Asegúrate de que tus versiones tengan fecha de inicio y fecha de finalización.
+Para desplegar manualmente:
+```bash
+docker build -t ghcr.io/alunatek-team/openproject-capacity-plugin:latest .
+docker push ghcr.io/alunatek-team/openproject-capacity-plugin:latest
+```
+
+## Uso en Kubernetes (ArgoCD)
+
+La imagen se referencia desde el manifest de ArgoCD en el repositorio `alunaid`:
+
+```yaml
+image:
+  registry: ghcr.io
+  repository: alunatek-team/openproject-capacity-plugin
+  tag: latest
+```
+
+## Instalacion manual (sin Docker)
+
+1. Clona este repositorio en el directorio `plugins/` de tu instalacion de OpenProject:
+   ```bash
+   cd /path/to/openproject/plugins
+   git clone https://github.com/AlunaTek-team/openproject-capacity-plugin.git capacity_management
+   ```
+
+2. Instala las dependencias y ejecuta el setup de campos personalizados:
+   ```bash
+   cd /path/to/openproject
+   bundle install
+   RAILS_ENV=production bundle exec rake capacity_management:setup
+   ```
+
+3. Reinicia tu servidor OpenProject.
+
+## Configuracion
+
+1. **Campos Personalizados**: El plugin crea automaticamente los siguientes campos:
+   - `Member Capacity (Hours)` (en el perfil de Usuario).
+   - `Remaining Work (Hours)` (en los Paquetes de Trabajo).
+2. **Sprints**: El plugin utiliza las `Versiones` de OpenProject para definir los sprints. Asegurate de que tus versiones tengan fecha de inicio y fecha de finalizacion.
 
 ## Uso
 
-1.  Navega a un proyecto.
-2.  En el menú lateral, selecciona **Capacidad y Carga**.
-3.  Podrás ver el Dashboard con la capacidad total, carga actual, velocidad y la gráfica de burn-down.
-4.  La lista de miembros mostrará en rojo a aquellos que tengan más horas asignadas que su capacidad disponible.
+1. Navega a un proyecto.
+2. En el menu lateral, selecciona **Capacidad y Carga**.
+3. Podras ver el Dashboard con la capacidad total, carga actual, velocidad y la grafica de burn-down.
+4. La lista de miembros mostrara en rojo a aquellos que tengan mas horas asignadas que su capacidad disponible.
 
-## Requisitos Técnicos
+## Requisitos Tecnicos
 
 - OpenProject >= 13.0
 - Ruby on Rails 7.x
-- Chart.js (cargado vía CDN)
+- Chart.js (cargado via CDN)

@@ -1,0 +1,4 @@
+# Plugin de capacidad de AlunaTek - se instala desde el repo local durante el build
+group :opf_plugins do
+  gem "openproject-capacity_management", path: "plugins/capacity_management"
+end
