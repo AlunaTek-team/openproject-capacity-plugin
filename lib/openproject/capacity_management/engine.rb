@@ -7,7 +7,7 @@ module OpenProject
 
       register 'openproject-capacity_management',
                requires_openproject: '>= 13.0.0',
-               author_url: 'https://github.com/AlunaTek-team' do
+               author_url: 'https://github.com/AlunaTek-team'
         project_module :capacity_management do
           permission :view_capacity_management, {
             'capacity_management/dashboard' => [:index, :data]
