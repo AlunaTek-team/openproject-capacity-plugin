@@ -15,8 +15,7 @@ module CapacityManagement
           name: name,
           field_format: field_format,
           is_required: false,
-          editable: true,
-          visible: true
+          editable: true
         )
       end
     end
@@ -28,7 +27,6 @@ module CapacityManagement
           field_format: field_format,
           is_required: false,
           editable: true,
-          visible: true,
           is_for_all: true
         )
       end
