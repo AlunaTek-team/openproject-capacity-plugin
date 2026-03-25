@@ -6,13 +6,19 @@ module OpenProject
       class_inflection_override('openproject' => 'OpenProject')
 
       initializer 'capacity_management.setup_custom_fields' do
-        # Esto se ejecuta automáticamente al arrancar OpenProject
-        if ActiveRecord::Base.connection.table_exists?('custom_fields')
+        # Solo actuar si la base de datos está lista y la tabla existe
+        if defined?(ActiveRecord) && ActiveRecord::Base.connection.table_exists?('custom_fields')
           begin
-            require_dependency File.expand_path('../../capacity_management/setup_service', __dir__)
-            CapacityManagement::SetupService.ensure_custom_fields
+            # Ruta absoluta segura para entornos de contenedores
+            plugin_root = File.expand_path('../../../..', __dir__)
+            setup_service_path = File.join(plugin_root, 'lib/capacity_management/setup_service.rb')
+            
+            if File.exist?(setup_service_path)
+              require setup_service_path
+              ::CapacityManagement::SetupService.ensure_custom_fields
+            end
           rescue => e
-            Rails.logger.error "Error configurando campos de Capacity Management: #{e.message}"
+            Rails.logger.warn "Aviso: No se pudieron configurar campos automáticamente (posiblemente durante seeding): #{e.message}"
           end
         end
       end
