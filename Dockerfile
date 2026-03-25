@@ -1,8 +1,12 @@
 # OpenProject con plugin openproject-capacity_management de AlunaTek
-# Imagen pública: ghcr.io/alunatek-team/openproject-capacity-plugin
+# Imagen publica: ghcr.io/alunatek-team/openproject-capacity-plugin
 
 FROM openproject/openproject:17
 
+# Copiar plugin a directorio de plugins de OpenProject
+COPY . /app/plugins/capacity_management/
+
+# Copiar Gemfile.plugins que referencia el plugin local
 COPY Gemfile.plugins /app/
 
 RUN bundle config unset --local deployment 2>/dev/null || true && \
@@ -13,3 +17,4 @@ RUN bundle config unset --local deployment 2>/dev/null || true && \
 RUN bundle list | grep openproject-capacity_management
 
 RUN ./docker/prod/setup/precompile-assets.sh
+
