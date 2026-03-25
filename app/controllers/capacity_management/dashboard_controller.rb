@@ -27,8 +27,14 @@ module CapacityManagement
     private
 
     def calculate_member_workloads
+      capacity_field = UserCustomField.find_by(name: 'Member Capacity (Hours)')
       @project.members.includes(:user).map do |member|
-        WorkloadService.check_overload(member.user, @sprint)
+        # Si el campo no existe, devolvemos un objeto seguro para evitar Error 500
+        if capacity_field.nil?
+          { user_name: member.user.name, capacity: 0, workload: 0, is_overloaded: false, percentage: 0 }
+        else
+          WorkloadService.check_overload(member.user, @sprint)
+        end
       end
     end
 
