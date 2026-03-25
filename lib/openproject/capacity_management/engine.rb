@@ -4,7 +4,7 @@ module OpenProject
       engine_name :openproject_capacity_management
 
       initializer 'capacity_management.register_plugin' do
-        OpenProject::Plugin.register :openproject_capacity_management do
+        OpenProject::Plugins.register :openproject_capacity_management do
           name 'Capacity Management Plugin'
           author 'Luis Avila'
           description 'Plugin to manage team capacity and workload.'
