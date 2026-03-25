@@ -4,15 +4,13 @@ module CapacityManagement
       capacity = calculate_user_capacity(user, sprint)
       workload = calculate_user_workload(user, sprint)
 
-      percentage = capacity.zero? ? 0 : (workload.to_f / capacity * 100).round(2)
-
       {
         user_id: user.id,
         user_name: user.name,
         capacity: capacity,
         workload: workload,
-        is_overloaded: workload > capacity,
-        percentage: percentage
+        is_overloaded: (capacity > 0 && workload > capacity),
+        percentage: (capacity > 0 ? (workload.to_f / capacity * 100).round(2) : 0)
       }
     end
 

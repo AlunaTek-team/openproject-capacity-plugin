@@ -16,7 +16,7 @@ module OpenProject
 
         menu :project_menu,
              :capacity_management_dashboard,
-             { controller: '/capacity_management/dashboard', action: 'index' },
+             { controller: 'capacity_management/dashboard', action: 'index' },
              caption: 'Capacidad y Carga',
              param: :project_id,
              icon: 'icon-context icon-stats',

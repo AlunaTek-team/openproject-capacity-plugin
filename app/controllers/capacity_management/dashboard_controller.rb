@@ -24,15 +24,6 @@ module CapacityManagement
 
     private
 
-    def find_project
-      @project = Project.find(params[:project_id])
-    end
-
-    def authorize
-      require_login
-      deny_access unless User.current.allowed_to?(:view_capacity_management, @project)
-    end
-
     def calculate_member_workloads
       capacity_field = UserCustomField.find_by(name: 'Member Capacity (Hours)')
       @project.members.includes(:user).map do |member|
