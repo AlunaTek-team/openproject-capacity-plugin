@@ -21,6 +21,12 @@ module OpenProject
                param: :project_id,
                icon: 'icon-context icon-stats',
                after: :overview
+
+          project_module :capacity_management do
+            permission :view_capacity_management, {
+              'capacity_management/dashboard' => [:index, :data]
+            }, public: true
+          end
         end
       end
     end
