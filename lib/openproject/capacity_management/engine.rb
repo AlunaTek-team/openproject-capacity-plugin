@@ -3,6 +3,8 @@ module OpenProject
     class Engine < ::Rails::Engine
       include OpenProject::Plugins::ActsAsOpEngine
 
+      class_inflection_override('openproject' => 'OpenProject')
+
       register 'openproject-capacity_management',
                requires_openproject: '>= 13.0.0',
                author_url: 'https://github.com/AlunaTek-team/openproject-capacity-plugin' do
