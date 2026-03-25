@@ -9,7 +9,7 @@ module OpenProject
         project_module :capacity_management do
           permission :view_capacity_management, {
             'capacity_management/dashboard' => [:index, :data]
-          }, public: true
+          }, permissible_on: :project, public: true
         end
 
         menu :project_menu,
