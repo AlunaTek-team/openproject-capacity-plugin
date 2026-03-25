@@ -9,7 +9,7 @@ module OpenProject
         # Esto se ejecuta automáticamente al arrancar OpenProject
         if ActiveRecord::Base.connection.table_exists?('custom_fields')
           begin
-            require_dependency File.expand_path('../../../capacity_management/setup_service', __dir__)
+            require_dependency File.expand_path('../../capacity_management/setup_service', __dir__)
             CapacityManagement::SetupService.ensure_custom_fields
           rescue => e
             Rails.logger.error "Error configurando campos de Capacity Management: #{e.message}"
