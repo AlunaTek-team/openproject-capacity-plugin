@@ -37,7 +37,7 @@ module OpenProject
              { controller: 'capacity_management/dashboard', action: 'index' },
              caption: 'Capacidad y Carga',
              param: :project_id,
-             icon: 'stats',
+             icon: 'graph',
              after: :overview
       end
     end
