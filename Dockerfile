@@ -18,3 +18,10 @@ RUN bundle list | grep openproject-capacity_management
 
 RUN ./docker/prod/setup/precompile-assets.sh
 
+# Copiar assets JS del plugin al directorio de assets publicos
+RUN mkdir -p /app/public/assets/capacity_management && \
+    cp /app/plugins/capacity_management/app/assets/javascripts/capacity_management/chart.min.js \
+       /app/public/assets/capacity_management/ && \
+    cp /app/plugins/capacity_management/app/assets/javascripts/capacity_management/dashboard.js \
+       /app/public/assets/capacity_management/
+

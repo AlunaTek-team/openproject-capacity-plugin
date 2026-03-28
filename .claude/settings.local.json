@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"style\\\\|color\\\\|background\\\\|theme\" c:Usersluissourcesreposopenproject-capacity-plugin --include=*.css --include=*.scss --include=*.sass)",
+      "Bash(docker ps:*)",
+      "Bash(docker cp:*)",
+      "Bash(docker restart:*)",
+      "Bash(docker exec:*)",
+      "Bash(PLUGIN_DIR=\"/c/Users/luis/sources/repos/openproject-capacity-plugin\")",
+      "Bash(CONTAINER=\"openproject-capacity-plugin-openproject-1\")",
+      "Bash(DEST=\"/app/plugins/capacity_management\")",
+      "Bash(__NEW_LINE_abf4c259f10e69a9__ docker:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker run:*)",
+      "Bash(docker build:*)"
+    ]
+  }
+}

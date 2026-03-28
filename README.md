@@ -1,39 +1,81 @@
 # OpenProject Capacity Management Plugin
 
-Plugin para gestionar la capacidad del equipo, monitorear la carga de trabajo y visualizar el progreso mediante graficas de burn-down.
+Plugin desarrollado por [AlunaTek](https://www.alunatek.com) para OpenProject 17+.
 
-## Caracteristicas
+Proporciona un dashboard completo de gestión de capacidad por sprint: carga de trabajo por miembro, indicadores de velocidad, configuración de disponibilidad individual, y gráfica de burndown interactiva basada en trabajo restante real.
 
-- **Definicion de Capacidad**: Campo personalizado para registrar las horas disponibles de cada miembro por sprint.
-- **Ajuste Automatico**: Calculo de capacidad ajustado segun dias laborables en el sprint.
-- **Monitoreo de Sobrecarga**: Identificacion visual de miembros con exceso de trabajo asignado.
-- **Graficas de Burn-down**: Visualizacion interactiva del progreso del sprint.
-- **Calculo de Velocidad**: Media de horas completadas en sprints anteriores.
+---
+
+## Características
+
+### Dashboard de capacidad y carga
+- Resumen del sprint: días hábiles totales y restantes, tareas totales/completadas/pendientes, proyectos incluidos.
+- Tarjetas de resumen del equipo: capacidad total, horas estimadas, horas invertidas y horas pendientes.
+
+### Trabajo por miembro
+- **Barra de progreso multicapa** por cada miembro:
+  - Azul → horas invertidas (tiempo registrado en TimeEntry)
+  - Verde semitransparente → horas pendientes (tareas abiertas con estimación)
+  - Gris → capacidad libre restante
+  - Marcador vertical naranja → avance esperado a la fecha según días disponibles del miembro
+- **Indicador de velocidad**: compara horas invertidas vs. avance esperado hoy.
+  - 🔴 Lento — < 80 % del esperado
+  - 🟢 Normal — 80–110 %
+  - 🔵 Adelantado — > 110 %
+  - (sin dato cuando el sprint aún no arrancó o el miembro no tiene tareas asignadas)
+
+### Configuración de capacidad por sprint
+- Tabla editable con horas/día y días disponibles por miembro.
+- Permite ajustar la disponibilidad real de cada persona (vacaciones, festivos, dedicación parcial).
+- Los cambios se guardan via AJAX sin recargar la página.
+
+### Gráfica de burndown
+- Eje X: días hábiles del sprint. Eje Y: horas restantes.
+- Línea de trabajo restante: calculada a partir del campo **Trabajo restante** (`remaining_hours`) de cada tarea, reflejando avance parcial aunque la tarea no esté cerrada.
+- Línea de capacidad restante: horas disponibles del equipo que quedan en el sprint.
+- Línea de tendencia ideal: descenso lineal desde el alcance total hasta cero.
+- Respeta los días no laborables configurados en OpenProject.
+
+### Filtros
+- Selector de sprint (versiones del proyecto).
+- Selector de proyectos multiselección: proyecto actual, subproyectos, o selección manual.
+
+---
+
+## Requisitos
+
+- OpenProject 17.x (Rails 7, Turbo)
+- PostgreSQL
+- Ruby >= 3.0
+
+---
 
 ## Imagen Docker
 
-La imagen se construye y publica automaticamente en GitHub Container Registry en cada push a `main`.
+La imagen se construye y publica automáticamente en GitHub Container Registry en cada push a `main`.
 
 ```
 ghcr.io/alunatek-team/openproject-capacity-plugin:latest
 ```
 
-### Despliegue automatico
+### Despliegue rápido con Docker Compose
 
-El workflow `.github/workflows/build.yml` se encarga de:
-1. Construir la imagen Docker con el plugin instalado
-2. Publicarla en `ghcr.io/alunatek-team/openproject-capacity-plugin`
-3. Etiquetarla con `latest` y el SHA del commit
+```bash
+git clone https://github.com/AlunaTek-team/openproject-capacity-plugin.git
+cd openproject-capacity-plugin
+docker compose up -d
+```
 
-Para desplegar manualmente:
+### Construcción manual
+
 ```bash
 docker build -t ghcr.io/alunatek-team/openproject-capacity-plugin:latest .
 docker push ghcr.io/alunatek-team/openproject-capacity-plugin:latest
 ```
 
-## Uso en Kubernetes (ArgoCD)
+---
 
-La imagen se referencia desde el manifest de ArgoCD en el repositorio `alunaid`:
+## Uso en Kubernetes (ArgoCD)
 
 ```yaml
 image:
@@ -42,39 +84,64 @@ image:
   tag: latest
 ```
 
-## Instalacion manual (sin Docker)
+---
 
-1. Clona este repositorio en el directorio `plugins/` de tu instalacion de OpenProject:
+## Instalación manual (sin Docker)
+
+1. Clona el repositorio en el directorio `plugins/` de tu instalación de OpenProject:
    ```bash
    cd /path/to/openproject/plugins
    git clone https://github.com/AlunaTek-team/openproject-capacity-plugin.git capacity_management
    ```
 
-2. Instala las dependencias y ejecuta el setup de campos personalizados:
+2. Instala dependencias y ejecuta el setup:
    ```bash
    cd /path/to/openproject
    bundle install
    RAILS_ENV=production bundle exec rake capacity_management:setup
    ```
 
-3. Reinicia tu servidor OpenProject.
+3. Reinicia OpenProject.
 
-## Configuracion
+---
 
-1. **Campos Personalizados**: El plugin crea automaticamente los siguientes campos:
-   - `Member Capacity (Hours)` (en el perfil de Usuario).
-   - `Remaining Work (Hours)` (en los Paquetes de Trabajo).
-2. **Sprints**: El plugin utiliza las `Versiones` de OpenProject para definir los sprints. Asegurate de que tus versiones tengan fecha de inicio y fecha de finalizacion.
+## Configuración
 
-## Uso
+### Sprints
+El plugin usa las **Versiones** de OpenProject como sprints. Cada versión debe tener:
+- **Fecha de inicio** (Start date)
+- **Fecha objetivo** (Due date / Effective date)
 
-1. Navega a un proyecto.
-2. En el menu lateral, selecciona **Capacidad y Carga**.
-3. Podras ver el Dashboard con la capacidad total, carga actual, velocidad y la grafica de burn-down.
-4. La lista de miembros mostrara en rojo a aquellos que tengan mas horas asignadas que su capacidad disponible.
+### Campos personalizados
+El rake task `capacity_management:setup` crea automáticamente:
+- `Capacity Per Day (Hours)` — campo de usuario con las horas de trabajo diarias por defecto.
 
-## Requisitos Tecnicos
+La configuración de horas y días disponibles **por sprint** se gestiona directamente desde el dashboard (tabla de configuración de capacidad), sin necesidad de campos adicionales.
 
-- OpenProject >= 13.0
-- Ruby on Rails 7.x
-- Chart.js (cargado via CDN)
+### Tareas y trabajo restante
+Para que el burndown refleje el avance parcial, actualiza el campo **Trabajo restante** de cada tarea a medida que el equipo avanza. OpenProject calcula automáticamente este campo al registrar tiempo si la tarea tiene estimación.
+
+---
+
+## Versionado
+
+La versión del plugin se gestiona en un único lugar:
+
+```
+openproject-capacity_management.gemspec  →  s.version = '1.0.0'
+```
+
+Para publicar una nueva versión:
+1. Actualiza `s.version` en el gemspec.
+2. Haz commit y push a `main`.
+3. El workflow de GitHub Actions construye y publica la imagen automáticamente con el tag `latest` y el SHA del commit.
+
+---
+
+## Autor
+
+Desarrollado por [AlunaTek](https://www.alunatek.com) — [info@alunatek.com](mailto:info@alunatek.com)
+
+Repositorio: [github.com/AlunaTek-team/openproject-capacity-plugin](https://github.com/AlunaTek-team/openproject-capacity-plugin)
+
+Licencia: GPLv3

@@ -1,0 +1,72 @@
+# OpenProject local development environment
+# Replica el setup de produccion (Helm chart 13.3.0) con el plugin de capacidad.
+#
+# Uso:
+#   docker compose up -d          # iniciar
+#   docker compose down            # detener
+#   docker compose exec openproject bundle install  # despues de editar el plugin
+#   docker compose restart openproject               # reiniciar para cargar cambios
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: openproject
+      POSTGRES_USER: openproject
+      POSTGRES_PASSWORD: "A9JwhfdacS"
+      POSTGRES_POSTGRES_PASSWORD: "9O8HAuZGPh"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openproject"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  memcached:
+    image: memcached:1.6-alpine
+    command: ["memcached", "-m", "256"]
+
+  openproject:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      memcached:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      # Database
+      DATABASE_URL: "postgres://openproject:A9JwhfdacS@postgres:5432/openproject"
+
+      # Host & protocol
+      OPENPROJECT_HOST__NAME: "localhost:8080"
+      OPENPROJECT_HTTPS: "false"
+
+      # Secret key (generar uno nuevo con: openssl rand -hex 32)
+      SECRET_KEY_BASE: "localdev_secret_key_base_change_me_for_real_usage_1234567890abcdef"
+
+      # Cache via Memcached
+      RAILS_CACHE_STORE: "memcache"
+      OPENPROJECT_CACHE__MEMCACHE__SERVER: "memcached:11211"
+
+      # TMPDIR (mismo que produccion)
+      TMPDIR: "/app/tmp"
+
+      # Rails env
+      RAILS_ENV: "production"
+
+      # Seed data on first run (true = carga datos iniciales)
+      OPENPROJECT_SEED__ADMIN: "true"
+    volumes:
+      - opdata:/app/files
+      - oplog:/var/log/openproject
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  opdata:
+  oplog:
