@@ -8,11 +8,11 @@ module CapacityManagement
     # 3. Si nada, usa 8h por defecto
     def self.hours_per_day(user, sprint: nil)
       if sprint
-        sprint_config = ::OpenProject::CapacityManagement::SprintCapacityConfiguration.find_config(sprint.id, user.id)
+        sprint_config = ::CapacityManagement::SprintCapacityConfiguration.find_config(sprint.id, user.id)
         return sprint_config.hours_per_day if sprint_config
       end
 
-      field = UserCustomField.find_by(name: 'Capacity Per Day (Hours)')
+      field = ::UserCustomField.find_by(name: 'Capacity Per Day (Hours)')
       return DEFAULT_HOURS_PER_DAY unless field
 
       val = user.custom_value_for(field)&.value.to_f
@@ -26,7 +26,7 @@ module CapacityManagement
     def self.sprint_capacity(user, sprint)
       return 0.0 unless sprint&.start_date && sprint&.effective_date
 
-      configured = ::OpenProject::CapacityManagement::SprintCapacityConfiguration
+      configured = ::CapacityManagement::SprintCapacityConfiguration
                      .available_days_for(sprint.id, user.id)
       work_days = configured || count_work_days(sprint.start_date, sprint.effective_date)
       (hours_per_day(user, sprint: sprint) * work_days).round(1)

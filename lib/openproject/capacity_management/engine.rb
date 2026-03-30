@@ -12,17 +12,15 @@ module OpenProject
         ]
       end
 
-      initializer 'capacity_management.load_custom_models' do
-        require_relative '../../capacity_management/sprint_capacity_configuration'
-      rescue LoadError => e
-        Rails.logger.warn "CapacityManagement: Could not load model: #{e.message}"
-      end
-
       initializer 'capacity_management.setup_custom_fields' do
         if defined?(ActiveRecord) && ActiveRecord::Base.connection.table_exists?('custom_fields')
           begin
             require_relative '../../capacity_management/setup_service'
-            ::CapacityManagement::SetupService.ensure_custom_fields
+            if defined?(::UserCustomField)
+              ::CapacityManagement::SetupService.ensure_custom_fields
+            else
+              Rails.logger.warn "CapacityManagement: UserCustomField not available yet, skipping setup"
+            end
           rescue => e
             Rails.logger.warn "Aviso: No se pudieron configurar campos automaticamente (posiblemente durante seeding): #{e.message}"
           end

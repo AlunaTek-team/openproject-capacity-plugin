@@ -8,8 +8,8 @@ module CapacityManagement
     private
 
     def self.ensure_user_custom_field(name, field_format)
-      unless UserCustomField.exists?(name: name)
-        UserCustomField.create!(
+      unless ::UserCustomField.exists?(name: name)
+        ::UserCustomField.create!(
           name:         name,
           field_format: field_format,
           is_required:  false,

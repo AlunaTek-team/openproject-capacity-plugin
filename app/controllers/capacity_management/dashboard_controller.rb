@@ -169,6 +169,8 @@ module CapacityManagement
 
     # ── Resumen del equipo ────────────────────────────────────────────────
     def build_team_summary
+      return { total_capacity: 0.0, total_estimated: 0.0, completed_hours: 0.0, remaining_hours: 0.0, percent_complete: 0.0 } unless @sprint
+
       wps      = filtered_work_packages
       total    = wps.sum { |wp| wp.estimated_hours.to_f }
       logged   = team_logged_hours
@@ -188,6 +190,8 @@ module CapacityManagement
 
     # ── Filas por miembro ─────────────────────────────────────────────────
     def build_member_rows
+      return [] unless @sprint
+
       wps         = filtered_work_packages
       users       = filtered_member_users
       project_ids = filtered_projects.map(&:id)
@@ -205,7 +209,7 @@ module CapacityManagement
                                  .sum { |wp| wp.estimated_hours.to_f }.round(1)
 
         # Avance esperado a la fecha según los días disponibles del miembro
-        config_days    = ::OpenProject::CapacityManagement::SprintCapacityConfiguration
+        config_days    = ::CapacityManagement::SprintCapacityConfiguration
                            .available_days_for(@sprint.id, user.id)
         avail_days     = config_days || sprint_total_days
         elapsed_avail  = [sprint_elapsed, avail_days].min
@@ -234,6 +238,7 @@ module CapacityManagement
         wp_url = "/projects/#{@project.identifier}/work_packages?query_props=#{wp_filters}"
 
         {
+          user:             user,
           user_id:        user.id,
           user_name:      user.name,
           initials:       user.name.split.map { |w| w[0].upcase }.first(2).join,
@@ -260,8 +265,9 @@ module CapacityManagement
       sprint_work_days = work_days_between(@sprint.start_date, @sprint.effective_date)
       users = filtered_member_users
       users.map do |user|
-        config = ::OpenProject::CapacityManagement::SprintCapacityConfiguration.find_config(@sprint.id, user.id)
+        config = ::CapacityManagement::SprintCapacityConfiguration.find_config(@sprint.id, user.id)
         {
+          user:             user,
           user_id:          user.id,
           user_name:        user.name,
           initials:         user.name.split.map { |w| w[0].upcase }.first(2).join,
@@ -298,7 +304,7 @@ module CapacityManagement
       done_h      = total_h - current_rem
       not_estimated = wps.count { |wp| wp.estimated_hours.to_f == 0.0 }
       users         = filtered_member_users
-      cap_per_day   = users.sum { |u| WorkloadService.hours_per_day(u) }
+      cap_per_day   = users.sum { |u| WorkloadService.hours_per_day(u, sprint: @sprint) }
       days_elapsed  = wdays.count { |d| d <= today }
 
       # Tendencia ideal: de total_h el dia 1 a 0 el ultimo dia
