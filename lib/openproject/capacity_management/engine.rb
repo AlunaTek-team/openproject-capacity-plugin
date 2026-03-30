@@ -36,7 +36,7 @@ module OpenProject
           }, permissible_on: :project, public: true
 
           permission :edit_capacity_management, {
-            'capacity_management/dashboard' => [:save_capacity]
+            'capacity_management/dashboard' => [:save_capacity, :save_retrospective]
           }, permissible_on: :project
         end
 

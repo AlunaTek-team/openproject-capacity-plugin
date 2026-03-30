@@ -1,19 +1,32 @@
 <div id="cm-dashboard"
      data-sprint-id="<%= @sprint&.id %>"
-     data-save-path="<%= capacity_management_save_capacity_path rescue '' %>">
+     data-save-path="<%= capacity_management_save_capacity_path rescue '' %>"
+     data-retro-path="<%= capacity_management_save_retrospective_path rescue '' %>"
+     data-active-tab="<%= @active_tab %>">
 
-  <%# ── CABECERA: filtros de proyecto + selector de sprint + info sprint ── %>
+  <%# ── CABECERA ── %>
   <div class="cm-page-header">
     <div class="cm-title-row">
-      <h2 class="cm-title">Capacidad y Carga del Sprint</h2>
+      <h2 class="cm-title">Gestión de Sprint</h2>
     </div>
 
+    <%# ── Pestañas ── %>
+    <div class="cm-tabs" id="cm-tabs">
+      <button class="cm-tab <%= 'cm-tab-active' if @active_tab == 'capacity' %>" data-tab="capacity">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M1.5 1.75V13.5h13V1.75H1.5Zm-1.5 0C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v11.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25V1.75ZM5 11V5h1.5v6H5Zm3.5 0V7.5H10V11H8.5ZM12 11V4h1.5v7H12Z"/></svg>
+        Capacidad y Carga
+      </button>
+      <button class="cm-tab <%= 'cm-tab-active' if @active_tab == 'retrospective' %>" data-tab="retrospective">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM8 4a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 4Z"/></svg>
+        Retrospectiva
+      </button>
+    </div>
+
+    <%# ── Filtros ── %>
     <div class="cm-filters-row">
       <form method="get" id="cm-filters-form" class="cm-filters-form">
-
-        <%# ── Filtro de proyectos: dropdown con checkboxes ── %>
+        <input type="hidden" name="tab" id="cm-tab-input" value="<%= @active_tab %>" />
         <%
-          # Calcular qué proyectos están seleccionados actualmente
           active_ids = if @project_filter_mode == 'selected' && @selected_project_ids.any?
                          @selected_project_ids
                        elsif @project_filter_mode == 'all'
@@ -25,7 +38,6 @@
                        end
           all_selected = active_ids.sort == @available_projects.map { |p| p[:id] }.sort
 
-          # Texto del botón
           if all_selected && @available_projects.size > 1
             btn_text = "Todos los proyectos (#{@available_projects.size})"
           elsif active_ids.size == 1
@@ -33,8 +45,7 @@
           else
             btn_text = "#{active_ids.size} proyectos seleccionados"
           end
-        %>
-        <%
+
           children_ids = @available_projects.select { |p| p[:parent_id].present? }.map { |p| p[:id] }
           all_children_checked = children_ids.any? && children_ids.all? { |id| active_ids.include?(id) }
         %>
@@ -49,83 +60,59 @@
               </svg>
             </button>
           </div>
-
-          <%# Panel fuera del div.cm-multiselect para evitar clipping por overflow:hidden %>
           <div class="cm-multiselect-panel" id="cm-multiselect-panel" style="display:none">
-            <%# Tabs %>
             <div class="cm-ms-tabs">
               <button type="button" class="cm-ms-tab cm-ms-tab-active" id="cm-tab-all">Todos los proyectos</button>
               <button type="button" class="cm-ms-tab" id="cm-tab-selected">Solo seleccionados</button>
             </div>
-            <%# Búsqueda %>
             <div class="cm-ms-search-wrap">
               <svg class="cm-ms-search-icon" viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
                 <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"/>
               </svg>
               <input type="text" class="cm-ms-search" id="cm-ms-search" placeholder="Buscar proyectos..." />
             </div>
-            <%# Lista de proyectos %>
             <div class="cm-multiselect-list" id="cm-ms-list">
               <% @available_projects.each do |p| %>
-                <%
-                  is_parent = p[:parent_id].nil?
-                  is_checked = active_ids.include?(p[:id])
-                  proj_dash_url = "/projects/#{p[:identifier]}/capacity_management/"
-                %>
+                <% is_parent = p[:parent_id].nil?; is_checked = active_ids.include?(p[:id]); proj_dash_url = "/projects/#{p[:identifier]}/capacity_management/" %>
                 <div class="cm-multiselect-item-row" data-name="<%= h(p[:name].downcase) %>">
                   <label class="cm-multiselect-item <%= 'cm-multiselect-item-child' unless is_parent %>">
-                    <input type="checkbox" name="project_ids[]" value="<%= p[:id] %>"
-                           data-is-child="<%= is_parent ? 'false' : 'true' %>"
-                           <%= 'checked' if is_checked %> />
-                    <% if is_parent %>
-                      <span class="cm-project-icon cm-project-icon-parent">&#9632;</span>
-                    <% else %>
-                      <span class="cm-project-icon cm-project-icon-child">&#9500;</span>
-                    <% end %>
+                    <input type="checkbox" name="project_ids[]" value="<%= p[:id] %>" data-is-child="<%= is_parent ? 'false' : 'true' %>" <%= 'checked' if is_checked %> />
+                    <% if is_parent %><span class="cm-project-icon cm-project-icon-parent">&#9632;</span><% else %><span class="cm-project-icon cm-project-icon-child">&#9500;</span><% end %>
                     <span class="cm-multiselect-item-name"><%= p[:name] %></span>
                   </label>
                   <a href="<%= proj_dash_url %>" class="cm-proj-nav-link" title="Ir al dashboard de <%= h(p[:name]) %>">
-                    <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                      <path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"/>
-                    </svg>
+                    <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"/></svg>
                   </a>
                 </div>
               <% end %>
             </div>
-            <%# Pie %>
             <div class="cm-ms-footer">
               <% if children_ids.any? %>
               <label class="cm-ms-include-sub-label">
-                <input type="checkbox" id="cm-include-sub"
-                       <%= 'checked' if all_children_checked %> />
+                <input type="checkbox" id="cm-include-sub" <%= 'checked' if all_children_checked %> />
                 <span>Incluir todos los subproyectos</span>
               </label>
               <% end %>
               <div class="cm-ms-footer-btns">
-                <button type="button" class="cm-ms-clear-btn" id="cm-ms-clear-btn">Borrar selecci&oacute;n</button>
+                <button type="button" class="cm-ms-clear-btn" id="cm-ms-clear-btn">Borrar selección</button>
                 <button type="button" class="cm-multiselect-apply" id="cm-ms-apply-btn">Aplicar</button>
               </div>
             </div>
           </div>
         </div>
 
-        <%# Selector de sprint %>
         <div class="cm-filter-group">
           <label class="cm-filter-label">Sprint</label>
           <select name="sprint_id" class="cm-filter-select" id="cm-sprint-select">
             <option value="">-- Seleccionar --</option>
             <% @sprints.each do |s| %>
               <option value="<%= s.id %>" <%= 'selected' if s.id == @sprint&.id %>>
-                <%= s.name %>
-                <% if s.start_date && s.effective_date %>
-                  (<%= s.start_date.strftime('%d/%m') %> - <%= s.effective_date.strftime('%d/%m') %>)
-                <% end %>
+                <%= s.name %><% if s.start_date && s.effective_date %> (<%= s.start_date.strftime('%d/%m') %> - <%= s.effective_date.strftime('%d/%m') %>)<% end %>
               </option>
             <% end %>
           </select>
         </div>
 
-        <%# Hidden inputs para mantener project_ids al cambiar sprint (se manejan via JS) %>
         <div id="cm-hidden-project-ids">
           <% active_ids.each do |pid| %>
             <input type="hidden" name="project_ids[]" value="<%= pid %>" />
@@ -135,1127 +122,693 @@
     </div>
   </div>
 
-  <% if @sprint.nil? %>
-    <div class="cm-empty-state">
-      <p>No hay sprints (versiones) configurados en los proyectos seleccionados.</p>
-      <p>Ve a <strong>Configuraci&oacute;n del proyecto &rarr; Versiones</strong> para crear sprints.</p>
-    </div>
-  <% else %>
+  <%# ══════════════════════════════════════════════════════════════════ %>
+  <%#  PESTAÑA: CAPACIDAD Y CARGA                                        %>
+  <%# ══════════════════════════════════════════════════════════════════ %>
+  <div class="cm-tab-content" id="cm-tab-capacity" style="<%= 'display:none' unless @active_tab == 'capacity' %>">
+    <% if @sprint.nil? %>
+      <div class="cm-empty-state">
+        <p>No hay sprints configurados en los proyectos seleccionados.</p>
+        <p>Ve a <strong>Configuración del proyecto → Versiones</strong> para crear sprints.</p>
+      </div>
+    <% else %>
 
-  <%# ── INFORMACI&Oacute;N DEL SPRINT ── %>
-  <div class="cm-sprint-info-card">
-    <div class="cm-sprint-info-header">
-      <h3 class="cm-sprint-info-title"><%= @sprint_info[:name] %></h3>
-      <div class="cm-sprint-info-badges">
-        <span class="cm-badge cm-badge-blue"><%= @sprint_info[:total_tasks] %> tareas</span>
-        <span class="cm-badge cm-badge-green"><%= @sprint_info[:completed_tasks] %> completadas</span>
-        <span class="cm-badge cm-badge-orange"><%= @sprint_info[:pending_tasks] %> pendientes</span>
+    <%# ── Info del sprint ── %>
+    <div class="cm-sprint-info-card">
+      <div class="cm-sprint-info-header">
+        <h3 class="cm-sprint-info-title"><%= @sprint_info[:name] %></h3>
+        <div class="cm-sprint-info-badges">
+          <span class="cm-badge cm-badge-blue"><%= @sprint_info[:total_tasks] %> tareas</span>
+          <span class="cm-badge cm-badge-green"><%= @sprint_info[:completed_tasks] %> completadas</span>
+          <span class="cm-badge cm-badge-orange"><%= @sprint_info[:pending_tasks] %> pendientes</span>
+        </div>
+      </div>
+      <div class="cm-sprint-info-details">
+        <div class="cm-sprint-detail"><span class="cm-detail-label">Fecha inicio</span><span class="cm-detail-value"><%= @sprint_info[:start_date] %></span></div>
+        <div class="cm-sprint-detail"><span class="cm-detail-label">Fecha fin</span><span class="cm-detail-value"><%= @sprint_info[:end_date] %></span></div>
+        <div class="cm-sprint-detail"><span class="cm-detail-label">Días hábiles</span><span class="cm-detail-value"><%= @sprint_info[:total_work_days] %></span></div>
+        <div class="cm-sprint-detail"><span class="cm-detail-label">Restantes</span><span class="cm-detail-value"><%= @sprint_info[:work_days_remaining] %></span></div>
+        <% if @sprint_info[:projects_count] && @sprint_info[:projects_count] > 1 %>
+        <div class="cm-sprint-detail cm-sprint-detail-wide"><span class="cm-detail-label">Proyectos incluidos</span><span class="cm-detail-value"><%= @sprint_info[:projects_names].join(', ') %></span></div>
+        <% end %>
       </div>
     </div>
-    <div class="cm-sprint-info-details">
-      <div class="cm-sprint-detail">
-        <span class="cm-detail-label">Fecha inicio</span>
-        <span class="cm-detail-value"><%= @sprint_info[:start_date] %></span>
+
+    <%# ── Tarjetas de resumen ── %>
+    <div class="cm-summary-cards">
+      <div class="cm-card"><div class="cm-card-label">Capacidad total</div><div class="cm-card-value"><%= @team_summary[:total_capacity] %>h</div><div class="cm-card-sub"><%= @sprint_info[:total_work_days] %> días hábiles</div></div>
+      <% over_capacity = @team_summary[:total_capacity] > 0 && @team_summary[:total_estimated] > @team_summary[:total_capacity] %>
+      <div class="cm-card"><div class="cm-card-label">Trabajo asignado</div><div class="cm-card-value <%= 'cm-value-over' if over_capacity %>"><%= @team_summary[:total_estimated] %>h</div><% assigned_pct = @team_summary[:total_capacity] > 0 ? (@team_summary[:total_estimated] / @team_summary[:total_capacity] * 100).round(1) : 0 %><div class="cm-card-sub"><%= assigned_pct %>% de la capacidad</div></div>
+      <div class="cm-card"><div class="cm-card-label">Invertido</div><div class="cm-card-value cm-value-done"><%= @team_summary[:completed_hours] %>h</div><div class="cm-card-sub"><%= @team_summary[:percent_complete] %>% del asignado</div></div>
+      <div class="cm-card"><div class="cm-card-label">Pendiente</div><div class="cm-card-value"><%= @team_summary[:remaining_hours] %>h</div><div class="cm-card-sub">en tareas abiertas</div></div>
+    </div>
+
+    <%# ── Burndown ── %>
+    <% stats = @burndown[:stats] %>
+    <% if stats && stats[:total_scope] > 0 %>
+    <div class="cm-section">
+      <div class="cm-section-header">
+        <h3>Burndown del Sprint</h3>
+        <div class="cm-burndown-legend">
+          <span class="cm-leg cm-leg-remaining">&#9644; Trabajo restante</span>
+          <span class="cm-leg cm-leg-capacity">&#8212; &#8212; Capacidad restante</span>
+          <span class="cm-leg cm-leg-ideal">&#8212; Tendencia ideal</span>
+        </div>
       </div>
-      <div class="cm-sprint-detail">
-        <span class="cm-detail-label">Fecha fin</span>
-        <span class="cm-detail-value"><%= @sprint_info[:end_date] %></span>
+      <div class="cm-burndown-stats-row">
+        <div class="cm-bstat"><span class="cm-bstat-val"><%= stats[:percent_complete] %>%</span><span class="cm-bstat-label">Completado</span></div>
+        <div class="cm-bstat"><span class="cm-bstat-val"><%= stats[:avg_burndown] %>h/día</span><span class="cm-bstat-label">Burndown necesario</span></div>
+        <div class="cm-bstat"><span class="cm-bstat-val"><%= stats[:not_estimated] %></span><span class="cm-bstat-label">Sin estimación</span></div>
+        <div class="cm-bstat"><span class="cm-bstat-val"><%= stats[:total_scope] %>h</span><span class="cm-bstat-label">Alcance total</span></div>
+        <div class="cm-bstat"><span class="cm-bstat-val"><%= stats[:current_remaining] %>h</span><span class="cm-bstat-label">Horas restantes</span></div>
       </div>
-      <div class="cm-sprint-detail">
-        <span class="cm-detail-label">D&iacute;as h&aacute;biles</span>
-        <span class="cm-detail-value"><%= @sprint_info[:total_work_days] %></span>
+      <div class="cm-chart-wrap"><canvas id="cm-burndown-chart" data-burndown="<%= @burndown.to_json %>"></canvas></div>
+    </div>
+    <% end %>
+
+    <%# ── Configuración de capacidad ── %>
+    <div class="cm-section">
+      <div class="cm-section-header">
+        <h3>Capacidad por miembro (horas/día)</h3>
+        <button type="button" class="cm-btn-save" id="cm-save-capacity-btn" disabled>Guardar cambios</button>
       </div>
-      <div class="cm-sprint-detail">
-        <span class="cm-detail-label">Restantes</span>
-        <span class="cm-detail-value"><%= @sprint_info[:work_days_remaining] %></span>
+      <p class="cm-capacity-help">Configura las horas disponibles por día y los días que cada miembro estará disponible en este sprint. La capacidad individual se calcula como <strong>horas/día × días disponibles</strong>.</p>
+      <div class="cm-table-wrap">
+      <table class="cm-capacity-table">
+        <thead><tr><th>Miembro</th><th class="cm-th-c">Horas/día</th><th class="cm-th-c">Días disponibles</th><th class="cm-th-c">Capacidad</th></tr></thead>
+        <tbody>
+          <% @capacity_configs.each do |cfg| %>
+            <tr>
+              <td class="cm-td-user"><%= avatar(cfg[:user], size: "mini") %><span><%= cfg[:user_name] %></span></td>
+              <td class="cm-th-c"><input type="number" class="cm-capacity-input cm-input-hours" data-user-id="<%= cfg[:user_id] %>" data-field="hours" value="<%= cfg[:hours_per_day] %>" min="0.5" max="24" step="0.5" /></td>
+              <td class="cm-th-c"><input type="number" class="cm-capacity-input cm-input-days" data-user-id="<%= cfg[:user_id] %>" data-field="days" data-sprint-days="<%= cfg[:sprint_work_days] %>" value="<%= cfg[:available_days] %>" min="1" max="<%= cfg[:sprint_work_days] %>" step="1" title="Días hábiles del sprint: <%= cfg[:sprint_work_days] %>" /></td>
+              <td class="cm-th-c cm-capacity-preview" data-user-id="<%= cfg[:user_id] %>"><%= (cfg[:hours_per_day] * cfg[:available_days]).round(1) %>h</td>
+            </tr>
+          <% end %>
+          <% if @capacity_configs.empty? %><tr><td colspan="4" class="cm-empty-state">No hay miembros en los proyectos seleccionados.</td></tr><% end %>
+        </tbody>
+      </table>
       </div>
-      <% if @sprint_info[:projects_count] && @sprint_info[:projects_count] > 1 %>
-      <div class="cm-sprint-detail cm-sprint-detail-wide">
-        <span class="cm-detail-label">Proyectos incluidos</span>
-        <span class="cm-detail-value"><%= @sprint_info[:projects_names].join(', ') %></span>
+    </div>
+
+    <%# ── Tabla de miembros ── %>
+    <div class="cm-section">
+      <div class="cm-section-header">
+        <h3>Trabajo por miembro</h3>
+        <div class="cm-prog-legend-global">
+          <span class="cm-legend-swatch cm-swatch-logged"></span><span>Invertido</span>
+          <span class="cm-legend-swatch cm-swatch-pending"></span><span>Pendiente</span>
+          <span class="cm-legend-marker-pip"></span><span>Esperado hoy</span>
+        </div>
+      </div>
+      <% if @member_rows.empty? %>
+        <p class="cm-empty-state">No hay miembros en los proyectos seleccionados.</p>
+      <% else %>
+      <div class="cm-table-wrap">
+      <table class="cm-member-table">
+        <thead><tr><th>Miembro</th><th>Progreso en el Sprint</th><th class="cm-th-r">Asignado</th><th class="cm-th-r">Invertido</th><th class="cm-th-r">Pendiente</th></tr></thead>
+        <tbody>
+          <% @member_rows.each do |m| %>
+            <%
+              cap = m[:capacity].to_f
+              if cap > 0
+                logged_pct = [(m[:logged] / cap * 100), 100].min.round(2)
+                assigned_pct = [(m[:assigned] / cap * 100), 100].min.round(2)
+                expected_pct = [(m[:expected_today] / cap * 100), 100].min.round(2)
+              else
+                logged_pct = assigned_pct = expected_pct = 0.0
+              end
+              case m[:speed_status]
+              when :slow
+                badge_cls = 'cm-speed-slow'; badge_icon = '&#9660;'; badge_label = 'Lento'
+              when :normal
+                badge_cls = 'cm-speed-normal'; badge_icon = '&#10003;'; badge_label = 'Normal'
+              when :fast
+                badge_cls = 'cm-speed-fast'; badge_icon = '&#9650;'; badge_label = 'Adelantado'
+              when :no_assign
+                badge_cls = 'cm-speed-nodata'; badge_icon = '&#8212;'; badge_label = 'Sin tareas'
+              else
+                badge_cls = 'cm-speed-nodata'; badge_icon = '&#8212;'; badge_label = 'Sin datos'
+              end
+              bar_tip = "Invertido: #{m[:logged]}h · Pendiente: #{m[:remaining_open]}h · Asignado: #{m[:assigned]}h · Capacidad: #{m[:capacity]}h · Esperado hoy: #{m[:expected_today]}h"
+            %>
+            <tr<%= m[:overloaded] ? ' class="cm-row-over"' : '' %>>
+              <td><div class="cm-td-user"><%= avatar(m[:user], size: "default") %><a href="<%= m[:wp_url] %>" class="cm-member-link"><%= m[:user_name] %></a></div></td>
+              <td class="cm-td-bar">
+                <div class="cm-progress-wrap">
+                  <div class="cm-progress-inner">
+                    <div class="cm-progress-track" title="<%= bar_tip %>">
+                      <% if assigned_pct > 0 %><div class="cm-prog-assigned" style="width:<%= assigned_pct %>%"></div><% end %>
+                      <% if logged_pct > 0 %><div class="cm-prog-logged" style="width:<%= logged_pct %>%"></div><% end %>
+                      <% if expected_pct > 0 %><div class="cm-prog-marker" style="left:<%= expected_pct %>%" title="Esperado hoy: <%= m[:expected_today] %>h"></div><% end %>
+                    </div>
+                    <div class="cm-prog-meta"><%= m[:logged] %>h inv. &nbsp;·&nbsp; <%= m[:assigned] %>h asig. &nbsp;·&nbsp; cap: <%= m[:capacity] %>h</div>
+                  </div>
+                  <span class="cm-speed-badge <%= badge_cls %>"><%= badge_icon.html_safe %>&nbsp;<%= badge_label %></span>
+                </div>
+              </td>
+              <td class="cm-td-r"><%= m[:assigned] %>h</td>
+              <td class="cm-td-r cm-td-done"><%= m[:logged] %>h</td>
+              <td class="cm-td-r"><%= m[:remaining_open] %>h</td>
+            </tr>
+          <% end %>
+          <% t = @team_summary %>
+          <% if t[:total_capacity] > 0 %>
+            <% t_assigned_pct = [(t[:total_estimated] / t[:total_capacity] * 100), 100].min.round(2) %>
+            <% t_logged_pct = [(t[:completed_hours] / t[:total_capacity] * 100), 100].min.round(2) %>
+          <% else %><% t_assigned_pct = 0; t_logged_pct = 0 %><% end %>
+          <tr class="cm-row-total">
+            <td><strong>Total equipo</strong></td>
+            <td class="cm-td-bar"><div class="cm-progress-wrap"><div class="cm-progress-inner"><div class="cm-progress-track"><% if t_assigned_pct > 0 %><div class="cm-prog-assigned" style="width:<%= t_assigned_pct %>%"></div><% end %><% if t_logged_pct > 0 %><div class="cm-prog-logged" style="width:<%= t_logged_pct %>%"></div><% end %></div><div class="cm-prog-meta"><%= t[:completed_hours] %>h inv. &nbsp;·&nbsp; <%= t[:total_estimated] %>h asig. &nbsp;·&nbsp; cap: <%= t[:total_capacity] %>h</div></div></div></td>
+            <td class="cm-td-r"><strong><%= t[:total_estimated] %>h</strong></td>
+            <td class="cm-td-r cm-td-done"><strong><%= t[:completed_hours] %>h</strong></td>
+            <td class="cm-td-r"><strong><%= t[:remaining_hours] %>h</strong></td>
+          </tr>
+        </tbody>
+      </table>
       </div>
       <% end %>
     </div>
-  </div>
 
-  <%# ── TARJETAS DE RESUMEN ── %>
-  <div class="cm-summary-cards">
-    <div class="cm-card">
-      <div class="cm-card-label">Capacidad total</div>
-      <div class="cm-card-value"><%= @team_summary[:total_capacity] %>h</div>
-      <div class="cm-card-sub"><%= @sprint_info[:total_work_days] %> d&iacute;as h&aacute;biles</div>
-    </div>
-    <% over_capacity = @team_summary[:total_capacity] > 0 && @team_summary[:total_estimated] > @team_summary[:total_capacity] %>
-    <div class="cm-card">
-      <div class="cm-card-label">Trabajo asignado</div>
-      <div class="cm-card-value <%= 'cm-value-over' if over_capacity %>"><%= @team_summary[:total_estimated] %>h</div>
-      <% assigned_pct = @team_summary[:total_capacity] > 0 ? (@team_summary[:total_estimated] / @team_summary[:total_capacity] * 100).round(1) : 0 %>
-      <div class="cm-card-sub"><%= assigned_pct %>% de la capacidad</div>
-    </div>
-    <div class="cm-card">
-      <div class="cm-card-label">Invertido</div>
-      <div class="cm-card-value cm-value-done"><%= @team_summary[:completed_hours] %>h</div>
-      <div class="cm-card-sub"><%= @team_summary[:percent_complete] %>% del asignado</div>
-    </div>
-    <div class="cm-card">
-      <div class="cm-card-label">Pendiente</div>
-      <div class="cm-card-value"><%= @team_summary[:remaining_hours] %>h</div>
-      <div class="cm-card-sub">en tareas abiertas</div>
-    </div>
-  </div>
-
-  <%# ── BURNDOWN ── %>
-  <% stats = @burndown[:stats] %>
-  <% if stats && stats[:total_scope] > 0 %>
-  <div class="cm-section">
-    <div class="cm-section-header">
-      <h3>Burndown del Sprint</h3>
-      <div class="cm-burndown-legend">
-        <span class="cm-leg cm-leg-remaining">&#9644; Trabajo restante</span>
-        <span class="cm-leg cm-leg-capacity">&#8212; &#8212; Capacidad restante</span>
-        <span class="cm-leg cm-leg-ideal">&#8212; Tendencia ideal</span>
-      </div>
-    </div>
-    <div class="cm-burndown-stats-row">
-      <div class="cm-bstat">
-        <span class="cm-bstat-val"><%= stats[:percent_complete] %>%</span>
-        <span class="cm-bstat-label">Completado</span>
-      </div>
-      <div class="cm-bstat">
-        <span class="cm-bstat-val"><%= stats[:avg_burndown] %>h/d&iacute;a</span>
-        <span class="cm-bstat-label">Burndown necesario</span>
-      </div>
-      <div class="cm-bstat">
-        <span class="cm-bstat-val"><%= stats[:not_estimated] %></span>
-        <span class="cm-bstat-label">Sin estimaci&oacute;n</span>
-      </div>
-      <div class="cm-bstat">
-        <span class="cm-bstat-val"><%= stats[:total_scope] %>h</span>
-        <span class="cm-bstat-label">Alcance total</span>
-      </div>
-      <div class="cm-bstat">
-        <span class="cm-bstat-val"><%= stats[:current_remaining] %>h</span>
-        <span class="cm-bstat-label">Horas restantes</span>
-      </div>
-    </div>
-    <div class="cm-chart-wrap">
-      <canvas id="cm-burndown-chart" data-burndown="<%= @burndown.to_json %>"></canvas>
-    </div>
-  </div>
-  <% end %>
-
-  <%# ── CONFIGURACI&Oacute;N DE CAPACIDAD POR MIEMBRO ── %>
-  <div class="cm-section">
-    <div class="cm-section-header">
-      <h3>Capacidad por miembro (horas/d&iacute;a)</h3>
-      <button type="button" class="cm-btn-save" id="cm-save-capacity-btn" disabled>
-        Guardar cambios
-      </button>
-    </div>
-    <p class="cm-capacity-help">
-      Configura las horas disponibles por d&iacute;a y los d&iacute;as que cada miembro estar&aacute; disponible en este sprint.
-      La capacidad individual se calcula como <strong>horas/d&iacute;a &times; d&iacute;as disponibles</strong>.
-    </p>
-    <div class="cm-table-wrap">
-    <table class="cm-capacity-table">
-      <thead>
-        <tr>
-          <th>Miembro</th>
-          <th class="cm-th-c">Horas/d&iacute;a</th>
-          <th class="cm-th-c">D&iacute;as disponibles</th>
-          <th class="cm-th-c">Capacidad</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @capacity_configs.each do |cfg| %>
-          <tr>
-            <td class="cm-td-user">
-              <%= avatar(cfg[:user], size: "mini") %>
-              <span><%= cfg[:user_name] %></span>
-            </td>
-            <td class="cm-th-c">
-              <input type="number"
-                     class="cm-capacity-input cm-input-hours"
-                     data-user-id="<%= cfg[:user_id] %>"
-                     data-field="hours"
-                     value="<%= cfg[:hours_per_day] %>"
-                     min="0.5" max="24" step="0.5"
-                     />
-            </td>
-            <td class="cm-th-c">
-              <input type="number"
-                     class="cm-capacity-input cm-input-days"
-                     data-user-id="<%= cfg[:user_id] %>"
-                     data-field="days"
-                     data-sprint-days="<%= cfg[:sprint_work_days] %>"
-                     value="<%= cfg[:available_days] %>"
-                     min="1" max="<%= cfg[:sprint_work_days] %>" step="1"
-                     title="D&iacute;as h&aacute;biles del sprint: <%= cfg[:sprint_work_days] %>" />
-            </td>
-            <td class="cm-th-c cm-capacity-preview" data-user-id="<%= cfg[:user_id] %>">
-              <%= (cfg[:hours_per_day] * cfg[:available_days]).round(1) %>h
-            </td>
-          </tr>
-        <% end %>
-        <% if @capacity_configs.empty? %>
-          <tr>
-            <td colspan="4" class="cm-empty-state">No hay miembros en los proyectos seleccionados.</td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-    </div>
-  </div>
-
-  <%# ── TABLA DE MIEMBROS ── %>
-  <div class="cm-section">
-    <div class="cm-section-header">
-      <h3>Trabajo por miembro</h3>
-      <div class="cm-prog-legend-global">
-        <span class="cm-legend-swatch cm-swatch-logged"></span><span>Invertido</span>
-        <span class="cm-legend-swatch cm-swatch-pending"></span><span>Pendiente</span>
-        <span class="cm-legend-marker-pip"></span><span>Esperado hoy</span>
-      </div>
-    </div>
-    <% if @member_rows.empty? %>
-      <p class="cm-empty-state">No hay miembros en los proyectos seleccionados.</p>
-    <% else %>
-    <div class="cm-table-wrap">
-    <table class="cm-member-table">
-      <thead>
-        <tr>
-          <th>Miembro</th>
-          <th>Progreso en el Sprint</th>
-          <th class="cm-th-r">Asignado</th>
-          <th class="cm-th-r">Invertido</th>
-          <th class="cm-th-r">Pendiente</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @member_rows.each do |m| %>
-          <%
-            cap = m[:capacity].to_f
-            if cap > 0
-              logged_pct   = [(m[:logged]         / cap * 100), 100].min.round(2)
-              assigned_pct = [(m[:assigned]        / cap * 100), 100].min.round(2)
-              expected_pct = [(m[:expected_today]  / cap * 100), 100].min.round(2)
-            else
-              logged_pct = assigned_pct = expected_pct = 0.0
-            end
-
-            case m[:speed_status]
-            when :slow
-              badge_cls  = 'cm-speed-slow'
-              badge_icon = '&#9660;'
-              badge_label = 'Lento'
-              badge_tip = "Avance real: #{m[:logged]}h\nEsperado hoy: #{m[:expected_today]}h\nRatio: #{m[:speed_ratio]}%\n\nDías transcurridos: #{m[:elapsed_days]} de #{m[:avail_days]} días disponibles\nUmbrales: <80% = lento · 80-110% = normal · >110% = adelantado"
-            when :normal
-              badge_cls  = 'cm-speed-normal'
-              badge_icon = '&#10003;'
-              badge_label = 'Normal'
-              badge_tip = "Avance real: #{m[:logged]}h\nEsperado hoy: #{m[:expected_today]}h\nRatio: #{m[:speed_ratio]}%\n\nDías transcurridos: #{m[:elapsed_days]} de #{m[:avail_days]} días disponibles\nUmbrales: <80% = lento · 80-110% = normal · >110% = adelantado"
-            when :fast
-              badge_cls  = 'cm-speed-fast'
-              badge_icon = '&#9650;'
-              badge_label = 'Adelantado'
-              badge_tip = "Avance real: #{m[:logged]}h\nEsperado hoy: #{m[:expected_today]}h\nRatio: #{m[:speed_ratio]}%\n\nDías transcurridos: #{m[:elapsed_days]} de #{m[:avail_days]} días disponibles\nUmbrales: <80% = lento · 80-110% = normal · >110% = adelantado"
-            when :no_assign
-              badge_cls = 'cm-speed-nodata'
-              badge_icon = '&#8212;'
-              badge_label = 'Sin tareas'
-              badge_tip = 'Sin tareas asignadas en este sprint'
-            else
-              badge_cls = 'cm-speed-nodata'
-              badge_icon = '&#8212;'
-              badge_label = 'Sin datos'
-              badge_tip = "El sprint aún no ha comenzado\nDías disponibles del miembro: #{m[:avail_days]}"
-            end
-
-            bar_tip = "Invertido: #{m[:logged]}h  ·  Pendiente: #{m[:remaining_open]}h  ·  Asignado: #{m[:assigned]}h  ·  Capacidad: #{m[:capacity]}h  ·  Esperado hoy: #{m[:expected_today]}h"
-          %>
-          <tr<%= m[:overloaded] ? ' class="cm-row-over"' : '' %>>
-            <td>
-              <div class="cm-td-user">
-                <%= avatar(m[:user], size: "default") %>
-                <a href="<%= m[:wp_url] %>" class="cm-member-link"><%= m[:user_name] %></a>
-              </div>
-            </td>
-            <td class="cm-td-bar">
-              <div class="cm-progress-wrap">
-                <div class="cm-progress-inner">
-                  <div class="cm-progress-track" title="<%= bar_tip %>">
-                    <%# Capa 1 (verde semitransparente): trabajo asignado total %>
-                    <% if assigned_pct > 0 %>
-                    <div class="cm-prog-assigned" style="width:<%= assigned_pct %>%"></div>
-                    <% end %>
-                    <%# Capa 2 (azul): horas realmente invertidas %>
-                    <% if logged_pct > 0 %>
-                    <div class="cm-prog-logged" style="width:<%= logged_pct %>%"></div>
-                    <% end %>
-                    <%# Marcador naranja: avance esperado a la fecha %>
-                    <% if expected_pct > 0 %>
-                    <div class="cm-prog-marker" style="left:<%= expected_pct %>%"
-                         title="Esperado hoy: <%= m[:expected_today] %>h"></div>
-                    <% end %>
-                  </div>
-                  <div class="cm-prog-meta">
-                    <%= m[:logged] %>h inv. &nbsp;&middot;&nbsp; <%= m[:assigned] %>h asig. &nbsp;&middot;&nbsp; cap: <%= m[:capacity] %>h
-                  </div>
-                </div>
-                <span class="cm-speed-badge <%= badge_cls %>" title="<%= badge_tip %>">
-                  <%= badge_icon.html_safe %>&nbsp;<%= badge_label %>
-                </span>
-              </div>
-            </td>
-            <td class="cm-td-r"><%= m[:assigned] %>h</td>
-            <td class="cm-td-r cm-td-done"><%= m[:logged] %>h</td>
-            <td class="cm-td-r"><%= m[:remaining_open] %>h</td>
-          </tr>
-        <% end %>
-        <%# Fila total %>
-        <% t = @team_summary %>
-        <% if t[:total_capacity] > 0 %>
-          <% t_assigned_pct = [(t[:total_estimated] / t[:total_capacity] * 100), 100].min.round(2) %>
-          <% t_logged_pct   = [(t[:completed_hours] / t[:total_capacity] * 100), 100].min.round(2) %>
-        <% else %>
-          <% t_assigned_pct = 0; t_logged_pct = 0 %>
-        <% end %>
-        <tr class="cm-row-total">
-          <td><strong>Total equipo</strong></td>
-          <td class="cm-td-bar">
-            <div class="cm-progress-wrap">
-              <div class="cm-progress-inner">
-                <div class="cm-progress-track">
-                  <% if t_assigned_pct > 0 %>
-                  <div class="cm-prog-assigned" style="width:<%= t_assigned_pct %>%"></div>
-                  <% end %>
-                  <% if t_logged_pct > 0 %>
-                  <div class="cm-prog-logged" style="width:<%= t_logged_pct %>%"></div>
-                  <% end %>
-                </div>
-                <div class="cm-prog-meta">
-                  <%= t[:completed_hours] %>h inv. &nbsp;&middot;&nbsp; <%= t[:total_estimated] %>h asig. &nbsp;&middot;&nbsp; cap: <%= t[:total_capacity] %>h
-                </div>
-              </div>
-            </div>
-          </td>
-          <td class="cm-td-r"><strong><%= t[:total_estimated] %>h</strong></td>
-          <td class="cm-td-r cm-td-done"><strong><%= t[:completed_hours] %>h</strong></td>
-          <td class="cm-td-r"><strong><%= t[:remaining_hours] %>h</strong></td>
-        </tr>
-      </tbody>
-    </table>
-    </div>
     <% end %>
   </div>
 
-  <% end -%><%# fin @sprint.nil? %>
+  <%# ══════════════════════════════════════════════════════════════════ %>
+  <%#  PESTAÑA: RETROSPECTIVA                                           %>
+  <%# ══════════════════════════════════════════════════════════════════ %>
+  <div class="cm-tab-content" id="cm-tab-retrospective" style="<%= 'display:none' unless @active_tab == 'retrospective' %>">
+    <% if @past_sprints.empty? %>
+      <div class="cm-empty-state">
+        <p>No hay sprints pasados para mostrar retrospectiva.</p>
+        <p>Los sprints aparecerán aquí cuando su estado sea <strong>cerrado</strong> o su <strong>fecha efectiva haya pasado</strong>.</p>
+      </div>
+    <% else %>
+
+    <%# ── Gráficas de evolución ── %>
+    <% if @retrospective_data.size >= 2 %>
+    <div class="cm-section">
+      <div class="cm-section-header"><h3>Evolución del equipo</h3></div>
+      <div class="cm-retro-charts-grid">
+        <div class="cm-retro-chart-card">
+          <div class="cm-retro-chart-title">Velocidad (horas completadas)</div>
+          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-velocity-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:velocity] } }.to_json %>"></canvas></div>
+        </div>
+        <div class="cm-retro-chart-card">
+          <div class="cm-retro-chart-title">Tareas cerradas por sprint</div>
+          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-throughput-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:throughput] } }.to_json %>"></canvas></div>
+        </div>
+        <div class="cm-retro-chart-card">
+          <div class="cm-retro-chart-title">Predictibilidad (% cumplido)</div>
+          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-predictability-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:predictability] } }.to_json %>"></canvas></div>
+        </div>
+        <div class="cm-retro-chart-card">
+          <div class="cm-retro-chart-title">Tasa de completado (%)</div>
+          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-completion-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:completion_rate] } }.to_json %>"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <% end %>
+
+    <%# ── Tarjetas KPI resumen ── %>
+    <% if @retrospective_data.any? %>
+    <% rd = @retrospective_data %>
+    <div class="cm-summary-cards">
+      <div class="cm-card">
+        <div class="cm-card-label">Sprints analizados</div>
+        <div class="cm-card-value"><%= rd.size %></div>
+        <div class="cm-card-sub">proyectos filtrados</div>
+      </div>
+      <div class="cm-card">
+        <div class="cm-card-label">Velocity promedio</div>
+        <div class="cm-card-value"><%= (rd.sum { |d| d[:velocity] } / rd.size).round(1) %>h</div>
+        <div class="cm-card-sub">horas completadas / sprint</div>
+      </div>
+      <div class="cm-card">
+        <div class="cm-card-label">Predictibilidad promedio</div>
+        <div class="cm-card-value"><%= (rd.sum { |d| d[:predictability] } / rd.size).round(1) %>%</div>
+        <div class="cm-card-sub">compromiso cumplido</div>
+      </div>
+      <div class="cm-card">
+        <div class="cm-card-label">Throughput total</div>
+        <div class="cm-card-value"><%= rd.sum { |d| d[:throughput] } %></div>
+        <div class="cm-card-sub">tareas cerradas</div>
+      </div>
+    </div>
+    <% end %>
+
+    <%# ── KPI Legend ── %>
+    <div class="cm-section">
+      <div class="cm-section-header"><h3>¿Qué significan estos KPIs?</h3></div>
+      <div class="cm-kpi-grid">
+        <div class="cm-kpi-card">
+          <div class="cm-kpi-name">Velocity</div>
+          <div class="cm-kpi-desc">Horas de trabajo completadas en el sprint. Indica la capacidad real del equipo por sprint. Un valor estable sugiere un equipo maduro en estimación.</div>
+          <div class="cm-kpi-bench"><strong>Referencia:</strong> Comparar con sprints anteriores. No hay un valor "bueno" universal; lo importante es la tendencia.</div>
+        </div>
+        <div class="cm-kpi-card">
+          <div class="cm-kpi-name">Predictibilidad</div>
+          <div class="cm-kpi-desc">% del trabajo comprometido que fue completado. Mide qué tan bien el equipo cumple sus compromisos.</div>
+          <div class="cm-kpi-bench"><strong>Referencia:</strong> &gt;85% = excelente · 70-85% = bueno · &lt;70% = revisar planificación</div>
+        </div>
+        <div class="cm-kpi-card">
+          <div class="cm-kpi-name">Throughput</div>
+          <div class="cm-kpi-desc">Número de tareas cerradas en el sprint. Refleja la productividad del equipo en cantidad de entregables.</div>
+          <div class="cm-kpi-bench"><strong>Referencia:</strong> Depende del tamaño de las tareas. Combinar con velocity para contexto.</div>
+        </div>
+        <div class="cm-kpi-card">
+          <div class="cm-kpi-name">Tasa de completado</div>
+          <div class="cm-kpi-desc">% de tareas del sprint que fueron cerradas. Similar a predictibilidad pero basada en conteo de tareas, no en horas.</div>
+          <div class="cm-kpi-bench"><strong>Referencia:</strong> &gt;90% = excelente · 75-90% = bueno · &lt;75% = posible sobrecarga</div>
+        </div>
+      </div>
+    </div>
+
+    <%# ── Tabla de sprints pasados ── %>
+    <div class="cm-section">
+      <div class="cm-section-header"><h3>Historial de sprints</h3></div>
+      <div class="cm-table-wrap">
+      <table class="cm-retro-table">
+        <thead>
+          <tr>
+            <th>Sprint</th>
+            <th>Estado</th>
+            <th class="cm-th-r">Tareas</th>
+            <th class="cm-th-r">Cerradas</th>
+            <th class="cm-th-r">Horas estim.</th>
+            <th class="cm-th-r">Horas compl.</th>
+            <th class="cm-th-r">Velocity</th>
+            <th class="cm-th-r">Predictib.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @retrospective_data.each do |rd| %>
+            <tr>
+              <td class="cm-td-sprint-name"><%= rd[:sprint_name] %><% if rd[:start_date] %><div class="cm-td-sprint-dates"><%= rd[:start_date] %> - <%= rd[:end_date] %></div><% end %></td>
+              <td><span class="cm-retro-status cm-retro-status-<%= rd[:status] %>"><%= rd[:status] == 'closed' ? 'Cerrado' : rd[:status] == 'locked' ? 'Bloqueado' : 'Pasado' %></span></td>
+              <td class="cm-th-r"><%= rd[:total_tasks] %></td>
+              <td class="cm-th-r cm-td-done"><%= rd[:completed_tasks] %></td>
+              <td class="cm-th-r"><%= rd[:total_hours] %>h</td>
+              <td class="cm-th-r cm-td-done"><%= rd[:closed_hours] %>h</td>
+              <td class="cm-th-r"><%= rd[:velocity] %>h</td>
+              <td class="cm-th-r"><%= rd[:predictability] %>%</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <%# ── Retrospectivas por sprint ── %>
+    <% @retrospective_data.each do |rd| %>
+    <div class="cm-section cm-retro-sprint" data-version-id="<%= rd[:sprint_id] %>">
+      <div class="cm-section-header">
+        <h3>Retrospectiva: <%= rd[:sprint_name] %></h3>
+        <% if rd[:start_date] %><span class="cm-retro-date"><%= rd[:start_date] %> - <%= rd[:end_date] %></span><% end %>
+      </div>
+
+      <%# KPIs del sprint %>
+      <div class="cm-retro-kpi-row">
+        <div class="cm-retro-kpi" title="Horas de trabajo completadas en el sprint">
+          <span class="cm-retro-kpi-val"><%= rd[:velocity] %>h</span>
+          <span class="cm-retro-kpi-label">Velocity</span>
+        </div>
+        <div class="cm-retro-kpi" title="% del trabajo comprometido que fue completado">
+          <span class="cm-retro-kpi-val"><%= rd[:predictability] %>%</span>
+          <span class="cm-retro-kpi-label">Predictibilidad</span>
+        </div>
+        <div class="cm-retro-kpi" title="Número de tareas cerradas">
+          <span class="cm-retro-kpi-val"><%= rd[:throughput] %></span>
+          <span class="cm-retro-kpi-label">Throughput</span>
+        </div>
+        <div class="cm-retro-kpi" title="% de tareas cerradas sobre el total">
+          <span class="cm-retro-kpi-val"><%= rd[:completion_rate] %>%</span>
+          <span class="cm-retro-kpi-label">Completado</span>
+        </div>
+        <% if rd[:estimation_accuracy] %>
+        <div class="cm-retro-kpi" title="% de horas reales vs estimadas (100% = estimación perfecta)">
+          <span class="cm-retro-kpi-val"><%= rd[:estimation_accuracy] %>%</span>
+          <span class="cm-retro-kpi-label">Precisión est.</span>
+        </div>
+        <% end %>
+      </div>
+
+      <%# Campos de retrospectiva %>
+      <div class="cm-retro-fields">
+        <div class="cm-retro-field">
+          <label class="cm-retro-label cm-retro-label-good">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 1.5 0V5Zm3.25-.75a.75.75 0 0 0-1.5 0v4.5a.75.75 0 0 0 1.5 0v-4.5Z"/></svg>
+            ¿Qué salió bien?
+          </label>
+          <textarea class="cm-retro-textarea" data-field="went_well" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los logros, prácticas exitosas, fortalezas del equipo..."><%= rd[:retrospective]&.went_well %></textarea>
+        </div>
+        <div class="cm-retro-field">
+          <label class="cm-retro-label cm-retro-label-bad">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm-.75 4v5a.75.75 0 0 0 1.5 0V4a.75.75 0 0 0-1.5 0ZM8 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
+            ¿Qué salió mal?
+          </label>
+          <textarea class="cm-retro-textarea" data-field="went_wrong" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los obstáculos, bloqueos, problemas encontrados..."><%= rd[:retrospective]&.went_wrong %></textarea>
+        </div>
+        <div class="cm-retro-field">
+          <label class="cm-retro-label cm-retro-label-improve">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"/></svg>
+            ¿Qué podemos mejorar?
+          </label>
+          <textarea class="cm-retro-textarea" data-field="improvements" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe las acciones de mejora para el próximo sprint..."><%= rd[:retrospective]&.improvements %></textarea>
+        </div>
+        <button type="button" class="cm-btn-save cm-retro-save-btn" data-version-id="<%= rd[:sprint_id] %>" disabled>Guardar retrospectiva</button>
+      </div>
+    </div>
+    <% end %>
+
+    <% end %>
+  </div>
+
 </div>
 
 <script src="/assets/capacity_management/chart.min.js"></script>
 <script src="/assets/capacity_management/dashboard.js"></script>
 
 <style>
-/* ── Variables: tema claro (por defecto) ── */
+/* ═══════════════════════════════════════════════════════
+   VARIABLES DE TEMA
+   ═══════════════════════════════════════════════════════ */
 #cm-dashboard {
-  --cm-bg-page:       transparent;
-  --cm-bg-card:       #ffffff;
-  --cm-bg-hover:      #f3f2f1;
-  --cm-bg-row-hover:  #faf9f8;
-  --cm-bg-total:      #f8f8f8;
-  --cm-bg-danger:     #fdf3f3;
-  --cm-bg-input:      #ffffff;
-
-  --cm-text-primary:   #201f1e;
-  --cm-text-secondary: #605e5c;
-  --cm-text-tertiary:  #a19f9d;
-
-  --cm-border:       #c8c6c4;
-  --cm-border-light: #edebe9;
-  --cm-border-row:   #f3f2f1;
-
-  --cm-color-primary:       #0078d4;
-  --cm-color-primary-hover: #106ebe;
-  --cm-color-primary-focus: rgba(0,120,212,0.15);
-  --cm-color-success:       #107c10;
-  --cm-color-danger:        #a4262c;
-  --cm-color-warning:       #ff8c00;
-  --cm-color-btn-disabled:  #c8c6c4;
-
-  --cm-badge-blue-bg:    #e8f0fe;
-  --cm-badge-blue-text:  #1967d2;
-  --cm-badge-green-bg:   #e6f4ea;
-  --cm-badge-green-text: #137333;
-  --cm-badge-orange-bg:  #fef7e0;
-  --cm-badge-orange-text:#b06000;
-
-  --cm-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  --cm-shadow-panel: 0 4px 16px rgba(0,0,0,0.12);
+  --cm-bg-page: transparent; --cm-bg-card: #ffffff; --cm-bg-hover: #f3f2f1;
+  --cm-bg-row-hover: #faf9f8; --cm-bg-total: #f8f8f8; --cm-bg-danger: #fdf3f3; --cm-bg-input: #ffffff;
+  --cm-text-primary: #201f1e; --cm-text-secondary: #605e5c; --cm-text-tertiary: #a19f9d;
+  --cm-border: #c8c6c4; --cm-border-light: #edebe9; --cm-border-row: #f3f2f1;
+  --cm-color-primary: #0078d4; --cm-color-primary-hover: #106ebe; --cm-color-primary-focus: rgba(0,120,212,0.15);
+  --cm-color-success: #107c10; --cm-color-danger: #a4262c; --cm-color-warning: #ff8c00; --cm-color-btn-disabled: #c8c6c4;
+  --cm-badge-blue-bg: #e8f0fe; --cm-badge-blue-text: #1967d2;
+  --cm-badge-green-bg: #e6f4ea; --cm-badge-green-text: #137333;
+  --cm-badge-orange-bg: #fef7e0; --cm-badge-orange-text: #b06000;
+  --cm-shadow: 0 1px 3px rgba(0,0,0,0.04); --cm-shadow-panel: 0 4px 16px rgba(0,0,0,0.12);
+  --cm-retro-good-bg: #e6f4ea; --cm-retro-good-border: #137333;
+  --cm-retro-bad-bg: #fdf3f3; --cm-retro-bad-border: #a4262c;
+  --cm-retro-improve-bg: #e8f0fe; --cm-retro-improve-border: #1967d2;
 }
 
-/* ── Variables: tema oscuro ── */
 body[data-color-mode="dark"] #cm-dashboard {
-  --cm-bg-page:       transparent;
-  --cm-bg-card:       #22272e;
-  --cm-bg-hover:      #2d333b;
-  --cm-bg-row-hover:  #2d333b;
-  --cm-bg-total:      #2a2f37;
-  --cm-bg-danger:     #3d1f1f;
-  --cm-bg-input:      #1c2128;
-
-  --cm-text-primary:   #adbac7;
-  --cm-text-secondary: #768390;
-  --cm-text-tertiary:  #545d68;
-
-  --cm-border:       #444c56;
-  --cm-border-light: #373e47;
-  --cm-border-row:   #2d333b;
-
-  --cm-color-primary:       #539bf5;
-  --cm-color-primary-hover: #6cb6ff;
-  --cm-color-primary-focus: rgba(83,155,245,0.20);
-  --cm-color-success:       #57ab5a;
-  --cm-color-danger:        #e5534b;
-  --cm-color-warning:       #c69026;
-  --cm-color-btn-disabled:  #444c56;
-
-  --cm-badge-blue-bg:    #1b3a5c;
-  --cm-badge-blue-text:  #6cb6ff;
-  --cm-badge-green-bg:   #1a3520;
-  --cm-badge-green-text: #57ab5a;
-  --cm-badge-orange-bg:  #3a2a0a;
-  --cm-badge-orange-text:#c69026;
-
-  --cm-shadow: 0 1px 3px rgba(0,0,0,0.30);
-  --cm-shadow-panel: 0 4px 16px rgba(0,0,0,0.40);
+  --cm-bg-page: transparent; --cm-bg-card: #22272e; --cm-bg-hover: #2d333b;
+  --cm-bg-row-hover: #2d333b; --cm-bg-total: #2a2f37; --cm-bg-danger: #3d1f1f; --cm-bg-input: #1c2128;
+  --cm-text-primary: #adbac7; --cm-text-secondary: #768390; --cm-text-tertiary: #545d68;
+  --cm-border: #444c56; --cm-border-light: #373e47; --cm-border-row: #2d333b;
+  --cm-color-primary: #539bf5; --cm-color-primary-hover: #6cb6ff; --cm-color-primary-focus: rgba(83,155,245,0.20);
+  --cm-color-success: #57ab5a; --cm-color-danger: #e5534b; --cm-color-warning: #c69026; --cm-color-btn-disabled: #444c56;
+  --cm-badge-blue-bg: #1b3a5c; --cm-badge-blue-text: #6cb6ff;
+  --cm-badge-green-bg: #1a3520; --cm-badge-green-text: #57ab5a;
+  --cm-badge-orange-bg: #3a2a0a; --cm-badge-orange-text: #c69026;
+  --cm-shadow: 0 1px 3px rgba(0,0,0,0.30); --cm-shadow-panel: 0 4px 16px rgba(0,0,0,0.40);
+  --cm-retro-good-bg: #1a3520; --cm-retro-good-border: #57ab5a;
+  --cm-retro-bad-bg: #3d1f1f; --cm-retro-bad-border: #e5534b;
+  --cm-retro-improve-bg: #1b3a5c; --cm-retro-improve-border: #6cb6ff;
 }
 
-/* ── Layout base ── */
-#cm-dashboard {
-  padding: 24px;
-  font-size: 14px;
-  color: var(--cm-text-primary);
-  max-width: 1140px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-/* ── Cabecera ── */
+/* ═══════════════════════════════════════════════════════
+   LAYOUT BASE
+   ═══════════════════════════════════════════════════════ */
+#cm-dashboard { padding: 24px; font-size: 14px; color: var(--cm-text-primary); max-width: 1140px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 .cm-page-header { margin-bottom: 20px; }
-.cm-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
+.cm-title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .cm-title { margin: 0; font-size: 20px; font-weight: 600; }
 
-/* ── Filtros ── */
-.cm-filters-row { margin-bottom: 8px; }
-.cm-filters-form {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+/* ═══════════════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════════════ */
+.cm-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--cm-border-light); padding-bottom: 0; }
+.cm-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border: none; background: none; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; cursor: pointer; font-size: 13px; font-weight: 500;
+  color: var(--cm-text-secondary); transition: color 0.15s, border-color 0.15s; border-radius: 6px 6px 0 0;
 }
-.cm-filter-group { display: flex; flex-direction: column; gap: 4px; }
-.cm-filter-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--cm-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-.cm-filter-select {
-  padding: 5px 10px;
-  border: 1px solid var(--cm-border);
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-  background: var(--cm-bg-input);
-  color: var(--cm-text-primary);
-  min-width: 180px;
-}
+.cm-tab svg { opacity: 0.6; }
+.cm-tab:hover { color: var(--cm-text-primary); background: var(--cm-bg-hover); }
+.cm-tab-active { color: var(--cm-color-primary); border-bottom-color: var(--cm-color-primary); font-weight: 600; }
+.cm-tab-active svg { opacity: 1; }
 
-/* ── Multi-select dropdown proyectos ── */
+/* ═══════════════════════════════════════════════════════
+   FILTROS
+   ═══════════════════════════════════════════════════════ */
+.cm-filters-row { margin-bottom: 8px; }
+.cm-filters-form { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.cm-filter-group { display: flex; flex-direction: column; gap: 4px; }
+.cm-filter-label { font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
+.cm-filter-select { padding: 5px 10px; border: 1px solid var(--cm-border); border-radius: 4px; font-size: 13px; cursor: pointer; background: var(--cm-bg-input); color: var(--cm-text-primary); min-width: 180px; }
+
+/* Multi-select */
 .cm-multiselect { position: relative; }
-.cm-multiselect-btn {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--cm-border);
-  border-radius: 4px;
-  font-size: 13px;
-  background: var(--cm-bg-input);
-  cursor: pointer;
-  min-width: 220px;
-  max-width: 320px;
-  text-align: left;
-  color: var(--cm-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.cm-multiselect-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid var(--cm-border); border-radius: 4px; font-size: 13px; background: var(--cm-bg-input); cursor: pointer; min-width: 220px; max-width: 320px; text-align: left; color: var(--cm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-multiselect-btn:hover { border-color: var(--cm-color-primary); }
 .cm-multiselect-btn:focus { outline: none; border-color: var(--cm-color-primary); box-shadow: 0 0 0 2px var(--cm-color-primary-focus); }
 .cm-multiselect-arrow { flex-shrink: 0; color: var(--cm-text-secondary); }
-
-.cm-multiselect-panel {
-  position: fixed;
-  z-index: 9999;
-  background: var(--cm-bg-card);
-  border: 1px solid var(--cm-border);
-  border-radius: 6px;
-  box-shadow: var(--cm-shadow-panel);
-  width: 310px;
-  overflow: hidden;
-}
-
-/* Tabs */
+.cm-multiselect-panel { position: fixed; z-index: 9999; background: var(--cm-bg-card); border: 1px solid var(--cm-border); border-radius: 6px; box-shadow: var(--cm-shadow-panel); width: 310px; overflow: hidden; }
 .cm-ms-tabs { display: flex; border-bottom: 1px solid var(--cm-border-light); }
-.cm-ms-tab {
-  flex: 1;
-  padding: 9px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  color: var(--cm-text-secondary);
-  transition: color 0.1s;
-  white-space: nowrap;
-}
+.cm-ms-tab { flex: 1; padding: 9px 10px; font-size: 12px; font-weight: 500; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; color: var(--cm-text-secondary); transition: color 0.1s; white-space: nowrap; }
 .cm-ms-tab:hover { color: var(--cm-text-primary); }
 .cm-ms-tab-active { color: var(--cm-color-primary); border-bottom-color: var(--cm-color-primary); font-weight: 600; }
-
-/* Búsqueda */
-.cm-ms-search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--cm-border-light);
-}
+.cm-ms-search-wrap { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--cm-border-light); }
 .cm-ms-search-icon { color: var(--cm-text-tertiary); flex-shrink: 0; }
 .cm-ms-search { flex: 1; border: none; outline: none; font-size: 13px; background: transparent; color: var(--cm-text-primary); }
 .cm-ms-search::placeholder { color: var(--cm-text-tertiary); }
-
-/* Lista */
 .cm-multiselect-list { max-height: 240px; overflow-y: auto; padding: 4px 0; }
-.cm-multiselect-item-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  padding-right: 4px;
-}
+.cm-multiselect-item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding-right: 4px; }
 .cm-multiselect-item-row .cm-multiselect-item { flex: 1; min-width: 0; }
-.cm-multiselect-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--cm-text-primary);
-  transition: background 0.1s;
-}
+.cm-multiselect-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--cm-text-primary); transition: background 0.1s; }
 .cm-multiselect-item:hover { background: var(--cm-bg-hover); }
 .cm-multiselect-item input[type="checkbox"] { cursor: pointer; flex-shrink: 0; }
 .cm-multiselect-item-child { padding-left: 24px; color: var(--cm-text-secondary); }
 .cm-project-icon { font-size: 9px; flex-shrink: 0; }
 .cm-project-icon-parent { color: var(--cm-color-primary); }
-.cm-project-icon-child  { color: var(--cm-text-tertiary); }
+.cm-project-icon-child { color: var(--cm-text-tertiary); }
 .cm-multiselect-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Pie del panel */
-.cm-ms-footer {
-  border-top: 1px solid var(--cm-border-light);
-  padding: 8px 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cm-ms-include-sub-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--cm-text-primary);
-  user-select: none;
-}
+.cm-ms-footer { border-top: 1px solid var(--cm-border-light); padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.cm-ms-include-sub-label { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: var(--cm-text-primary); user-select: none; }
 .cm-ms-footer-btns { display: flex; gap: 8px; justify-content: flex-end; }
-.cm-ms-clear-btn {
-  padding: 5px 12px;
-  background: none;
-  color: var(--cm-text-secondary);
-  border: 1px solid var(--cm-border);
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-}
+.cm-ms-clear-btn { padding: 5px 12px; background: none; color: var(--cm-text-secondary); border: 1px solid var(--cm-border); border-radius: 4px; font-size: 13px; cursor: pointer; }
 .cm-ms-clear-btn:hover { border-color: var(--cm-color-primary); color: var(--cm-color-primary); }
-.cm-multiselect-apply {
-  padding: 5px 16px;
-  background: var(--cm-color-primary);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
+.cm-multiselect-apply { padding: 5px 16px; background: var(--cm-color-primary); color: #fff; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .cm-multiselect-apply:hover { background: var(--cm-color-primary-hover); }
+.cm-proj-nav-link { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--cm-text-tertiary); text-decoration: none; margin-right: 4px; transition: color 0.1s, background 0.1s; }
+.cm-proj-nav-link:hover { color: var(--cm-color-primary); background: var(--cm-bg-hover); }
 
-/* ── Info del sprint ── */
-.cm-sprint-info-card {
-  background: var(--cm-bg-card);
-  border: 1px solid var(--cm-border-light);
-  border-radius: 6px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
-  box-shadow: var(--cm-shadow);
-}
-.cm-sprint-info-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
+/* ═══════════════════════════════════════════════════════
+   COMPONENTES COMPARTIDOS
+   ═══════════════════════════════════════════════════════ */
+.cm-sprint-info-card { background: var(--cm-bg-card); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 20px 24px; margin-bottom: 20px; box-shadow: var(--cm-shadow); }
+.cm-sprint-info-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .cm-sprint-info-title { margin: 0; font-size: 18px; font-weight: 600; }
 .cm-sprint-info-badges { display: flex; gap: 8px; flex-wrap: wrap; }
-.cm-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.cm-badge-blue   { background: var(--cm-badge-blue-bg);   color: var(--cm-badge-blue-text); }
-.cm-badge-green  { background: var(--cm-badge-green-bg);  color: var(--cm-badge-green-text); }
+.cm-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.cm-badge-blue { background: var(--cm-badge-blue-bg); color: var(--cm-badge-blue-text); }
+.cm-badge-green { background: var(--cm-badge-green-bg); color: var(--cm-badge-green-text); }
 .cm-badge-orange { background: var(--cm-badge-orange-bg); color: var(--cm-badge-orange-text); }
-
-.cm-sprint-info-details {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-}
+.cm-sprint-info-details { display: flex; gap: 24px; flex-wrap: wrap; }
 .cm-sprint-detail { display: flex; flex-direction: column; min-width: 120px; }
 .cm-sprint-detail-wide { min-width: 240px; flex: 1; }
-.cm-detail-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--cm-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
-}
+.cm-detail-label { font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .cm-detail-value { font-size: 14px; font-weight: 600; color: var(--cm-text-primary); }
-
-/* ── Tarjetas de resumen ── */
-.cm-summary-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.cm-card {
-  background: var(--cm-bg-card);
-  border: 1px solid var(--cm-border-light);
-  border-radius: 6px;
-  padding: 16px 20px;
-  box-shadow: var(--cm-shadow);
-}
-.cm-card-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--cm-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-bottom: 6px;
-}
+.cm-summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.cm-card { background: var(--cm-bg-card); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 16px 20px; box-shadow: var(--cm-shadow); }
+.cm-card-label { font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
 .cm-card-value { font-size: 28px; font-weight: 700; color: var(--cm-text-primary); line-height: 1.1; }
-.cm-card-sub   { font-size: 12px; color: var(--cm-text-tertiary); margin-top: 4px; }
+.cm-card-sub { font-size: 12px; color: var(--cm-text-tertiary); margin-top: 4px; }
 .cm-value-over { color: var(--cm-color-danger) !important; }
 .cm-value-done { color: var(--cm-color-success) !important; }
-
-/* ── Secciones ── */
-.cm-section {
-  background: var(--cm-bg-card);
-  border: 1px solid var(--cm-border-light);
-  border-radius: 6px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
-  box-shadow: var(--cm-shadow);
-}
+.cm-section { background: var(--cm-bg-card); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 20px 24px; margin-bottom: 20px; box-shadow: var(--cm-shadow); }
 .cm-section h3 { margin: 0 0 16px 0; font-size: 15px; font-weight: 600; }
-.cm-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+.cm-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
 .cm-section-header h3 { margin: 0; font-size: 15px; font-weight: 600; }
-
-/* ── Leyenda burndown ── */
 .cm-burndown-legend { display: flex; gap: 16px; font-size: 12px; flex-wrap: wrap; }
 .cm-leg-remaining { color: var(--cm-color-primary); font-weight: 600; }
-.cm-leg-capacity  { color: var(--cm-color-success); font-weight: 600; }
-.cm-leg-ideal     { color: var(--cm-text-tertiary); font-weight: 600; }
-
-/* ── Stats burndown ── */
-.cm-burndown-stats-row {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--cm-border-row);
-}
+.cm-leg-capacity { color: var(--cm-color-success); font-weight: 600; }
+.cm-leg-ideal { color: var(--cm-text-tertiary); font-weight: 600; }
+.cm-burndown-stats-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--cm-border-row); }
 .cm-bstat { display: flex; flex-direction: column; min-width: 80px; }
-.cm-bstat-val   { font-size: 22px; font-weight: 700; color: var(--cm-text-primary); line-height: 1.2; }
+.cm-bstat-val { font-size: 22px; font-weight: 700; color: var(--cm-text-primary); line-height: 1.2; }
 .cm-bstat-label { font-size: 11px; font-weight: 600; color: var(--cm-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-
-/* ── Chart ── */
 .cm-chart-wrap { position: relative; height: 300px; }
 .cm-chart-wrap canvas { max-height: 300px; }
-
-/* ── Tabla capacidad ── */
 .cm-capacity-help { font-size: 12px; color: var(--cm-text-secondary); margin-bottom: 12px; line-height: 1.5; }
 .cm-capacity-table { width: 100%; border-collapse: collapse; }
 .cm-capacity-preview { font-weight: 600; color: var(--cm-color-primary); }
-.cm-capacity-table th {
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--cm-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  padding: 8px 12px;
-  border-bottom: 2px solid var(--cm-border-light);
-}
+.cm-capacity-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; padding: 8px 12px; border-bottom: 2px solid var(--cm-border-light); }
 .cm-th-c { text-align: center; }
 .cm-capacity-table td { padding: 10px 12px; border-bottom: 1px solid var(--cm-border-row); vertical-align: middle; }
-.cm-capacity-input {
-  width: 80px;
-  padding: 5px 8px;
-  border: 1px solid var(--cm-border);
-  border-radius: 4px;
-  font-size: 14px;
-  text-align: center;
-  background: var(--cm-bg-input);
-  color: var(--cm-text-primary);
-}
-.cm-capacity-input:focus {
-  border-color: var(--cm-color-primary);
-  outline: none;
-  box-shadow: 0 0 0 2px var(--cm-color-primary-focus);
-}
-.cm-btn-save {
-  padding: 6px 16px;
-  background: var(--cm-color-primary);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
+.cm-capacity-input { width: 80px; padding: 5px 8px; border: 1px solid var(--cm-border); border-radius: 4px; font-size: 14px; text-align: center; background: var(--cm-bg-input); color: var(--cm-text-primary); }
+.cm-capacity-input:focus { border-color: var(--cm-color-primary); outline: none; box-shadow: 0 0 0 2px var(--cm-color-primary-focus); }
+.cm-btn-save { padding: 6px 16px; background: var(--cm-color-primary); color: #fff; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .cm-btn-save:hover { background: var(--cm-color-primary-hover); }
-.cm-btn-save:disabled {
-  background: var(--cm-color-btn-disabled);
-  cursor: not-allowed;
-}
-
-/* ── Tabla de miembros ── */
+.cm-btn-save:disabled { background: var(--cm-color-btn-disabled); cursor: not-allowed; }
 .cm-member-table { width: 100%; border-collapse: collapse; }
-.cm-member-table th {
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--cm-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  padding: 8px 12px;
-  border-bottom: 2px solid var(--cm-border-light);
-}
+.cm-member-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; padding: 8px 12px; border-bottom: 2px solid var(--cm-border-light); }
 .cm-th-r { text-align: right; }
 .cm-member-table td { padding: 10px 12px; border-bottom: 1px solid var(--cm-border-row); vertical-align: middle; }
 .cm-member-table tbody tr:hover { background: var(--cm-bg-row-hover); }
-.cm-row-over td  { background: var(--cm-bg-danger) !important; }
+.cm-row-over td { background: var(--cm-bg-danger) !important; }
 .cm-row-total td { background: var(--cm-bg-total); border-top: 2px solid var(--cm-border-light); border-bottom: none; }
-
-/* Avatar + nombre */
-.cm-td-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 140px;
-  white-space: nowrap;
-}
-.cm-td-user img,
-.cm-td-user .opce-principal {
-  flex-shrink: 0;
-}
-
-/* ── Columna de progreso ── */
+.cm-td-user { display: flex; align-items: center; gap: 8px; min-width: 140px; white-space: nowrap; }
+.cm-td-user img, .cm-td-user .opce-principal { flex-shrink: 0; }
 .cm-td-bar { min-width: 250px; }
-
-.cm-progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.cm-progress-inner {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.cm-progress-track {
-  position: relative;
-  height: 12px;
-  background: var(--cm-border-light);
-  border-radius: 6px;
-  overflow: visible;
-  cursor: help;
-}
-
-.cm-prog-assigned {
-  position: absolute;
-  top: 0; left: 0;
-  height: 100%;
-  background: var(--cm-color-success);
-  opacity: 0.38;
-  border-radius: 6px;
-  transition: width 0.3s ease;
-}
-
-.cm-prog-logged {
-  position: absolute;
-  top: 0; left: 0;
-  height: 100%;
-  background: var(--cm-color-primary);
-  border-radius: 6px;
-  transition: width 0.3s ease;
-  z-index: 2;
-}
-
-.cm-prog-marker {
-  position: absolute;
-  top: -3px;
-  transform: translateX(-50%);
-  width: 3px;
-  height: 18px;
-  background: var(--cm-color-warning);
-  border-radius: 2px;
-  z-index: 10;
-  cursor: help;
-}
-
-.cm-prog-meta {
-  font-size: 11px;
-  color: var(--cm-text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── Indicador de velocidad ── */
-.cm-speed-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 9px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  flex-shrink: 0;
-  cursor: help;
-  border: 1px solid transparent;
-}
-.cm-speed-slow   {
-  background: rgba(164, 38,  44, 0.10);
-  color: var(--cm-color-danger);
-  border-color: rgba(164, 38, 44, 0.25);
-}
-.cm-speed-normal {
-  background: rgba( 16, 124,  16, 0.10);
-  color: var(--cm-color-success);
-  border-color: rgba(16, 124, 16, 0.25);
-}
-.cm-speed-fast {
-  background: rgba(  0, 120, 212, 0.10);
-  color: var(--cm-color-primary);
-  border-color: rgba(0, 120, 212, 0.25);
-}
-.cm-speed-nodata {
-  background: transparent;
-  color: var(--cm-text-tertiary);
-  border-color: var(--cm-border);
-}
-
-/* ── Leyenda global ── */
-.cm-prog-legend-global {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--cm-text-secondary);
-  flex-wrap: wrap;
-}
-.cm-legend-swatch {
-  display: inline-block;
-  width: 12px;
-  height: 10px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.cm-swatch-logged  { background: var(--cm-color-primary); }
+.cm-progress-wrap { display: flex; align-items: center; gap: 10px; }
+.cm-progress-inner { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cm-progress-track { position: relative; height: 12px; background: var(--cm-border-light); border-radius: 6px; overflow: visible; cursor: help; }
+.cm-prog-assigned { position: absolute; top: 0; left: 0; height: 100%; background: var(--cm-color-success); opacity: 0.38; border-radius: 6px; transition: width 0.3s ease; }
+.cm-prog-logged { position: absolute; top: 0; left: 0; height: 100%; background: var(--cm-color-primary); border-radius: 6px; transition: width 0.3s ease; z-index: 2; }
+.cm-prog-marker { position: absolute; top: -3px; transform: translateX(-50%); width: 3px; height: 18px; background: var(--cm-color-warning); border-radius: 2px; z-index: 10; cursor: help; }
+.cm-prog-meta { font-size: 11px; color: var(--cm-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-speed-badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; cursor: help; border: 1px solid transparent; }
+.cm-speed-slow { background: rgba(164,38,44,0.10); color: var(--cm-color-danger); border-color: rgba(164,38,44,0.25); }
+.cm-speed-normal { background: rgba(16,124,16,0.10); color: var(--cm-color-success); border-color: rgba(16,124,16,0.25); }
+.cm-speed-fast { background: rgba(0,120,212,0.10); color: var(--cm-color-primary); border-color: rgba(0,120,212,0.25); }
+.cm-speed-nodata { background: transparent; color: var(--cm-text-tertiary); border-color: var(--cm-border); }
+.cm-prog-legend-global { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--cm-text-secondary); flex-wrap: wrap; }
+.cm-legend-swatch { display: inline-block; width: 12px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.cm-swatch-logged { background: var(--cm-color-primary); }
 .cm-swatch-pending { background: var(--cm-color-success); opacity: 0.45; }
-.cm-legend-marker-pip {
-  display: inline-block;
-  width: 3px;
-  height: 14px;
-  background: var(--cm-color-warning);
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-/* Celdas numericas */
-.cm-td-r    { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cm-legend-marker-pip { display: inline-block; width: 3px; height: 14px; background: var(--cm-color-warning); border-radius: 2px; flex-shrink: 0; }
+.cm-td-r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cm-td-done { color: var(--cm-color-success); }
-
-/* Estado vacio */
 .cm-empty-state { color: var(--cm-text-secondary); padding: 16px 0; line-height: 1.6; }
-
-/* Link nombre de miembro */
 .cm-member-link { color: var(--cm-text-primary); text-decoration: none; }
 .cm-member-link:hover { color: var(--cm-color-primary); text-decoration: underline; }
 
-/* Fila de proyecto en dropdown */
-.cm-multiselect-item-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-}
-.cm-multiselect-item-row .cm-multiselect-item { flex: 1; min-width: 0; }
-.cm-proj-nav-link {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  color: var(--cm-text-tertiary);
-  text-decoration: none;
-  margin-right: 4px;
-  transition: color 0.1s, background 0.1s;
-}
-.cm-proj-nav-link:hover {
-  color: var(--cm-color-primary);
-  background: var(--cm-bg-hover);
-}
+/* ═══════════════════════════════════════════════════════
+   RETROSPECTIVA — COMPONENTES
+   ═══════════════════════════════════════════════════════ */
 
-/* ══════════════════════════════════════════════════════
-   RESPONSIVE: Tablet (<= 820px)
-   ══════════════════════════════════════════════════════ */
+/* Grid de gráficas */
+.cm-retro-charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.cm-retro-chart-card { background: var(--cm-bg-hover); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 14px; }
+.cm-retro-chart-title { font-size: 12px; font-weight: 600; color: var(--cm-text-secondary); margin-bottom: 10px; }
+.cm-chart-wrap-sm { height: 200px; }
+.cm-chart-wrap-sm canvas { max-height: 200px; }
+
+/* KPI Grid (explicación) */
+.cm-kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.cm-kpi-card { background: var(--cm-bg-hover); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 14px; }
+.cm-kpi-name { font-size: 14px; font-weight: 700; color: var(--cm-color-primary); margin-bottom: 6px; }
+.cm-kpi-desc { font-size: 13px; color: var(--cm-text-primary); line-height: 1.5; margin-bottom: 8px; }
+.cm-kpi-bench { font-size: 12px; color: var(--cm-text-secondary); line-height: 1.4; padding-top: 8px; border-top: 1px solid var(--cm-border-light); }
+
+/* Tabla retrospectiva */
+.cm-retro-table { width: 100%; border-collapse: collapse; }
+.cm-retro-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; padding: 8px 12px; border-bottom: 2px solid var(--cm-border-light); }
+.cm-retro-table td { padding: 10px 12px; border-bottom: 1px solid var(--cm-border-row); vertical-align: middle; }
+.cm-retro-table tbody tr:hover { background: var(--cm-bg-row-hover); }
+.cm-td-sprint-name { font-weight: 600; }
+.cm-td-sprint-dates { font-size: 11px; color: var(--cm-text-tertiary); margin-top: 2px; }
+.cm-retro-status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.cm-retro-status-closed { background: var(--cm-badge-green-bg); color: var(--cm-badge-green-text); }
+.cm-retro-status-locked { background: var(--cm-badge-orange-bg); color: var(--cm-badge-orange-text); }
+.cm-retro-status-open { background: var(--cm-badge-blue-bg); color: var(--cm-badge-blue-text); }
+
+/* KPI Row (dentro de cada sprint) */
+.cm-retro-kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.cm-retro-kpi { display: flex; flex-direction: column; align-items: center; min-width: 90px; padding: 10px 14px; background: var(--cm-bg-hover); border-radius: 6px; border: 1px solid var(--cm-border-light); cursor: help; }
+.cm-retro-kpi-val { font-size: 18px; font-weight: 700; color: var(--cm-text-primary); }
+.cm-retro-kpi-label { font-size: 10px; font-weight: 600; color: var(--cm-text-tertiary); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; }
+
+/* Campos de retrospectiva */
+.cm-retro-fields { display: flex; flex-direction: column; gap: 12px; }
+.cm-retro-field { display: flex; flex-direction: column; gap: 6px; }
+.cm-retro-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.cm-retro-label-good { color: var(--cm-color-success); }
+.cm-retro-label-bad { color: var(--cm-color-danger); }
+.cm-retro-label-improve { color: var(--cm-color-primary); }
+.cm-retro-textarea {
+  width: 100%; min-height: 80px; padding: 10px 12px; border: 1px solid var(--cm-border); border-radius: 6px;
+  font-size: 13px; font-family: inherit; line-height: 1.5; resize: vertical;
+  background: var(--cm-bg-input); color: var(--cm-text-primary);
+}
+.cm-retro-textarea:focus { border-color: var(--cm-color-primary); outline: none; box-shadow: 0 0 0 2px var(--cm-color-primary-focus); }
+.cm-retro-textarea::placeholder { color: var(--cm-text-tertiary); }
+.cm-retro-save-btn { align-self: flex-start; margin-top: 4px; }
+.cm-retro-date { font-size: 12px; color: var(--cm-text-tertiary); }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE: TABLET
+   ═══════════════════════════════════════════════════════ */
 @media (max-width: 820px) {
   #cm-dashboard { padding: 16px; }
-
   .cm-summary-cards { grid-template-columns: repeat(2, 1fr); }
-
   .cm-filters-form { flex-direction: column; }
-
   .cm-sprint-info-details { flex-direction: column; gap: 12px; }
-
   .cm-multiselect-panel { width: calc(100vw - 32px); max-width: 360px; }
   .cm-multiselect-btn { min-width: 180px; }
-
   .cm-section { padding: 16px; }
-
   .cm-burndown-stats-row { gap: 16px; }
-
   .cm-chart-wrap { height: 240px; }
   .cm-chart-wrap canvas { max-height: 240px; }
+  .cm-retro-charts-grid { grid-template-columns: 1fr; }
+  .cm-kpi-grid { grid-template-columns: 1fr; }
+  .cm-retro-kpi-row { gap: 8px; }
 }
 
-/* ══════════════════════════════════════════════════════
-   RESPONSIVE: Mobile (<= 600px)
-   ══════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE: MOBILE
+   ═══════════════════════════════════════════════════════ */
 @media (max-width: 600px) {
   #cm-dashboard { padding: 12px; }
-
   .cm-title { font-size: 16px; }
-
-  /* Filtros: ancho completo */
+  .cm-tabs { gap: 2px; }
+  .cm-tab { padding: 6px 10px; font-size: 12px; }
+  .cm-tab svg { display: none; }
   .cm-multiselect-btn { width: 100%; min-width: 0; max-width: none; }
   .cm-filter-select { width: 100%; min-width: 0; }
-
-  /* Tarjetas: 1 columna en móvil */
   .cm-summary-cards { grid-template-columns: 1fr; }
   .cm-card { padding: 12px 16px; }
   .cm-card-value { font-size: 22px; }
-
-  /* Sprint info */
   .cm-sprint-info-card { padding: 14px 16px; }
   .cm-sprint-info-header { flex-direction: column; align-items: flex-start; }
   .cm-sprint-info-title { font-size: 16px; }
-
-  /* Stats burndown: 2 columnas */
   .cm-burndown-stats-row { gap: 12px; }
   .cm-bstat { min-width: calc(50% - 12px); flex: 1 1 calc(50% - 12px); }
   .cm-bstat-val { font-size: 18px; }
-
-  /* Chart más bajo en móvil */
   .cm-chart-wrap { height: 200px; }
   .cm-chart-wrap canvas { max-height: 200px; }
-
-  /* Secciones */
+  .cm-chart-wrap-sm { height: 160px; }
+  .cm-chart-wrap-sm canvas { max-height: 160px; }
   .cm-section { padding: 12px 14px; }
   .cm-section-header { flex-direction: column; align-items: flex-start; }
-
-  /* ── Tablas: scroll horizontal ── */
-  .cm-capacity-table,
-  .cm-member-table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    max-width: 100%;
-  }
-
-  .cm-capacity-table thead,
-  .cm-capacity-table tbody,
-  .cm-capacity-table tr,
-  .cm-member-table thead,
-  .cm-member-table tbody,
-  .cm-member-table tr {
-    display: table;
-    width: 100%;
-    table-layout: fixed;
-  }
-
-  /* Tabla capacidad: compactar inputs */
+  .cm-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .cm-table-wrap table { min-width: 580px; }
   .cm-capacity-input { width: 60px; font-size: 13px; padding: 4px 6px; }
-
-  /* Tabla miembros: layout card por fila */
   .cm-member-table thead { display: none; }
-
-  .cm-member-table tbody tr {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--cm-border-row);
-  }
+  .cm-member-table tbody tr { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--cm-border-row); }
   .cm-member-table tbody tr:hover { background: var(--cm-bg-row-hover); }
-  .cm-member-table td {
-    display: block;
-    padding: 0;
-    border-bottom: none;
-    width: 100% !important;
-  }
-
-  /* Fila de usuario: avatar + nombre + badge velocidad */
-  .cm-member-table td:first-child {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-  }
+  .cm-member-table td { display: block; padding: 0; border-bottom: none; width: 100% !important; }
+  .cm-member-table td:first-child { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
   .cm-member-table td:first-child .cm-td-user { flex: 1; min-width: 0; }
-
-  /* Barra de progreso: ancho completo */
   .cm-td-bar { min-width: 0; width: 100% !important; }
   .cm-progress-wrap { flex-wrap: wrap; }
   .cm-progress-inner { width: 100%; }
-
-  /* Stats numéricos debajo de la barra */
-  .cm-member-table .cm-td-r {
-    text-align: left;
-    display: inline;
-    padding-right: 12px;
-    font-size: 12px;
-  }
-  .cm-member-table .cm-td-r::before {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--cm-text-tertiary);
-    text-transform: uppercase;
-    margin-right: 4px;
-  }
+  .cm-member-table .cm-td-r { text-align: left; display: inline; padding-right: 12px; font-size: 12px; }
+  .cm-member-table .cm-td-r::before { font-size: 10px; font-weight: 600; color: var(--cm-text-tertiary); text-transform: uppercase; margin-right: 4px; }
   .cm-member-table td:nth-child(3)::before { content: "Asig: "; }
   .cm-member-table td:nth-child(4)::before { content: "Inv: "; }
   .cm-member-table td:nth-child(5)::before { content: "Pend: "; }
-
-  /* Fila total */
   .cm-row-total td:first-child { order: 0; }
   .cm-row-total td:nth-child(2) { order: 1; }
-  .cm-row-total td:nth-child(3),
-  .cm-row-total td:nth-child(4),
-  .cm-row-total td:nth-child(5) {
-    display: inline;
-    order: 2;
-  }
-
-  /* Legend burndown */
+  .cm-row-total td:nth-child(3), .cm-row-total td:nth-child(4), .cm-row-total td:nth-child(5) { display: inline; order: 2; }
   .cm-burndown-legend { flex-direction: column; gap: 4px; }
-
-  /* Capacity table en móvil: layout card */
   .cm-capacity-table thead { display: none; }
-  .cm-capacity-table tbody tr {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--cm-border-row);
-    align-items: center;
-  }
-  .cm-capacity-table td {
-    display: block;
-    padding: 0;
-    border-bottom: none;
-  }
+  .cm-capacity-table tbody tr { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--cm-border-row); align-items: center; }
+  .cm-capacity-table td { display: block; padding: 0; border-bottom: none; }
   .cm-capacity-table td:first-child { width: 100%; margin-bottom: 4px; }
-
-  /* Panel multiselect */
-  .cm-multiselect-panel {
-    width: calc(100vw - 24px);
-    max-width: none;
-    left: 12px !important;
-    right: 12px !important;
-  }
-
-  /* Botón guardar */
+  .cm-multiselect-panel { width: calc(100vw - 24px); max-width: none; left: 12px !important; right: 12px !important; }
   .cm-btn-save { width: 100%; text-align: center; padding: 10px 16px; }
+  .cm-retro-charts-grid { grid-template-columns: 1fr; }
+  .cm-kpi-grid { grid-template-columns: 1fr; }
+  .cm-retro-kpi-row { flex-direction: column; }
+  .cm-retro-kpi { flex-direction: row; justify-content: space-between; width: 100%; }
+  .cm-retro-textarea { min-height: 60px; }
+  .cm-retro-table { font-size: 12px; }
 }
 
-/* ══════════════════════════════════════════════════════
-   Table responsive wrapper
-   ══════════════════════════════════════════════════════ */
-.cm-table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.cm-table-wrap table {
-  min-width: 580px;
-}
+/* Table wrapper */
+.cm-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cm-table-wrap table { min-width: 580px; }
 @media (max-width: 600px) {
   .cm-table-wrap { overflow-x: visible; }
   .cm-table-wrap table { min-width: 0; }

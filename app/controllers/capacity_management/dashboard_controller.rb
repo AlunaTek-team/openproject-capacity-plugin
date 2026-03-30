@@ -6,13 +6,20 @@ module CapacityManagement
     before_action :load_project_filter
 
     def index
-      @sprints          = load_filtered_sprints
+      @sprints            = load_filtered_sprints
       @available_projects = available_projects_list
+      @active_tab         = params[:tab] || 'capacity'
+
+      # Capacity tab data
       @sprint_info      = build_sprint_info
       @team_summary     = build_team_summary
       @member_rows      = build_member_rows
       @burndown         = build_burndown
       @capacity_configs = build_capacity_configs
+
+      # Retrospective tab data
+      @past_sprints       = load_past_sprints
+      @retrospective_data = build_retrospective_data
     end
 
     def data
@@ -49,6 +56,19 @@ module CapacityManagement
         record.save!
       end
 
+      render json: { success: true }
+    rescue StandardError => e
+      render json: { success: false, error: e.message }, status: :unprocessable_entity
+    end
+
+    def save_retrospective
+      version_id = params.require(:version_id)
+      retro = SprintRetrospective.find_or_create_for(version_id, @project.id)
+      retro.update!(
+        went_well:    params[:went_well],
+        went_wrong:   params[:went_wrong],
+        improvements: params[:improvements]
+      )
       render json: { success: true }
     rescue StandardError => e
       render json: { success: false, error: e.message }, status: :unprocessable_entity
@@ -96,8 +116,6 @@ module CapacityManagement
       projects = filtered_projects
       project_ids = projects.map(&:id)
 
-      # Obtener versiones de todos los proyectos filtrados
-      # Las versiones pueden ser compartidas entre proyectos en OpenProject
       Version.where(project_id: project_ids)
              .distinct
              .order(effective_date: :desc)
@@ -111,20 +129,20 @@ module CapacityManagement
 
       return if @sprint
 
-      # Auto-detectar: primer sprint con fecha efectiva >= hoy
       sprints = @project.versions.order(:effective_date)
       @sprint = sprints.where('effective_date >= ?', Date.today).first
       @sprint ||= sprints.order(effective_date: :desc).first
     end
 
     # ── Work packages filtrados por sprint y proyectos ────────────────────
-    def filtered_work_packages
-      return [] unless @sprint
+    def filtered_work_packages(sprint: nil)
+      sprint ||= @sprint
+      return [] unless sprint
 
       project_ids = filtered_projects.map(&:id)
 
       WorkPackage.includes(:status, :assigned_to)
-                 .where(version_id: @sprint.id)
+                 .where(version_id: sprint.id)
                  .where(project_id: project_ids)
                  .to_a
     end
@@ -204,18 +222,22 @@ module CapacityManagement
         user_wps       = wps.select { |wp| wp.assigned_to_id == user.id }
         capacity       = WorkloadService.sprint_capacity(user, @sprint)
         assigned       = user_wps.sum { |wp| wp.estimated_hours.to_f }.round(1)
-        logged         = WorkloadService.logged_hours(user, @sprint, project_ids)
+
+        # Horas invertidas: time entries en WPs asignados al usuario (por cualquiera)
+        # + time entries del usuario en WPs no asignados a él
+        assigned_wp_ids = user_wps.map(&:id)
+        logged_assigned = assigned_wp_ids.any? ? TimeEntry.where(entity_type: 'WorkPackage', entity_id: assigned_wp_ids).sum(:hours).to_f : 0.0
+        logged_personal = WorkloadService.logged_hours(user, @sprint, project_ids)
+        logged = (logged_assigned + logged_personal).round(1)
         remaining_open = user_wps.reject { |wp| wp.status&.is_closed? }
                                  .sum { |wp| wp.estimated_hours.to_f }.round(1)
 
-        # Avance esperado a la fecha según los días disponibles del miembro
         config_days    = ::CapacityManagement::SprintCapacityConfiguration
                            .available_days_for(@sprint.id, user.id)
         avail_days     = config_days || sprint_total_days
         elapsed_avail  = [sprint_elapsed, avail_days].min
         expected_today = avail_days > 0 ? (assigned * elapsed_avail.to_f / avail_days).round(1) : 0.0
 
-        # Indicador de velocidad
         speed_status = if assigned == 0
           :no_assign
         elsif expected_today <= 0
@@ -307,12 +329,10 @@ module CapacityManagement
       cap_per_day   = users.sum { |u| WorkloadService.hours_per_day(u, sprint: @sprint) }
       days_elapsed  = wdays.count { |d| d <= today }
 
-      # Tendencia ideal: de total_h el dia 1 a 0 el ultimo dia
       ideal = wdays.each_with_index.map do |_, i|
         n > 1 ? (total_h * (1.0 - i.to_f / (n - 1))).round(2) : 0.0
       end
 
-      # Trabajo restante: interpolacion lineal
       remaining = wdays.each_with_index.map do |day, i|
         next nil if day > today
 
@@ -324,7 +344,6 @@ module CapacityManagement
         end
       end
 
-      # Capacidad restante
       capacity_line = wdays.each_with_index.map do |_, i|
         (cap_per_day * (n - i)).round(2)
       end
@@ -344,6 +363,86 @@ module CapacityManagement
           avg_burndown:      n > 0 ? (total_h / n).round(1) : 0.0
         }
       }
+    end
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  RETROSPECTIVA — Métodos
+    # ══════════════════════════════════════════════════════════════════════
+
+    def load_past_sprints
+      project_ids = filtered_projects.map(&:id)
+      Version.where(project_id: project_ids)
+             .where.not(status: 'open')
+             .or(Version.where(project_id: project_ids).where('effective_date < ?', Date.today))
+             .distinct
+             .order(effective_date: :desc)
+    end
+
+    def build_retrospective_data
+      sprints = load_past_sprints
+      project_ids = filtered_projects.map(&:id)
+
+      sprints.map do |sp|
+        wps = filtered_work_packages(sprint: sp)
+        retro = SprintRetrospective.find_by(version_id: sp.id, project_id: @project.id)
+
+        total_wps       = wps.count
+        closed_wps_list = closed_wps(wps)
+        open_wps_list   = wps.reject { |wp| wp.status&.is_closed? }
+
+        total_hours     = wps.sum { |wp| wp.estimated_hours.to_f }
+        closed_hours    = closed_wps_list.sum { |wp| wp.estimated_hours.to_f }
+        logged_hours    = team_logged_hours_for(sp)
+
+        # KPI: Velocity (horas completadas en el sprint)
+        velocity = closed_hours.round(1)
+
+        # KPI: Predictability (completado / comprometido)
+        predictability = total_hours > 0 ? (closed_hours / total_hours * 100).round(1) : 0.0
+
+        # KPI: Throughput (tareas cerradas)
+        throughput = closed_wps_list.count
+
+        # KPI: Completion rate (% tareas cerradas)
+        completion_rate = total_wps > 0 ? (throughput.to_f / total_wps * 100).round(1) : 0.0
+
+        # KPI: Scope change (tareas sin estimación = posible scope creep)
+        not_estimated = wps.count { |wp| wp.estimated_hours.to_f == 0.0 }
+
+        # KPI: Estimation accuracy (horas reales vs estimadas)
+        estimation_accuracy = total_hours > 0 ? (logged_hours / total_hours * 100).round(1) : nil
+
+        {
+          sprint:            sp,
+          sprint_id:         sp.id,
+          sprint_name:       sp.name,
+          start_date:        sp.start_date&.strftime('%d/%b/%Y'),
+          end_date:          sp.effective_date&.strftime('%d/%b/%Y'),
+          status:            sp.status,
+          total_tasks:       total_wps,
+          completed_tasks:   throughput,
+          open_tasks:        open_wps_list.count,
+          total_hours:       total_hours.round(1),
+          closed_hours:      closed_hours.round(1),
+          logged_hours:      logged_hours.round(1),
+          not_estimated:     not_estimated,
+          velocity:          velocity,
+          predictability:    predictability,
+          throughput:        throughput,
+          completion_rate:   completion_rate,
+          estimation_accuracy: estimation_accuracy,
+          retrospective:     retro
+        }
+      end
+    end
+
+    def team_logged_hours_for(sprint)
+      project_ids = filtered_projects.map(&:id)
+      wp_ids = WorkPackage.where(version_id: sprint.id, project_id: project_ids).pluck(:id)
+      return 0.0 if wp_ids.empty?
+      TimeEntry.where(entity_type: 'WorkPackage', entity_id: wp_ids).sum(:hours).to_f
+    rescue StandardError
+      0.0
     end
 
     # ── Helpers ───────────────────────────────────────────────────────────
@@ -366,7 +465,6 @@ module CapacityManagement
       @member_users ||= filtered_member_users
     end
 
-    # Usa NonWorkingDay de OpenProject si existe, sino cae a wday check
     def work_days_between(start_d, end_d)
       return 0 unless start_d && end_d
       return 0 if end_d < start_d
@@ -384,7 +482,6 @@ module CapacityManagement
     def work_day?(date)
       return false unless date.wday.between?(1, 5)
 
-      # Verificar contra NonWorkingDay de OpenProject
       if defined?(NonWorkingDay)
         !NonWorkingDay.exists?(date: date)
       else
