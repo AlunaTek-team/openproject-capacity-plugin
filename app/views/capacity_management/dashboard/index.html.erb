@@ -52,15 +52,14 @@
         <div class="cm-filter-group">
           <label class="cm-filter-label">Proyectos</label>
           <input type="hidden" name="project_filter" value="selected" />
-          <div class="cm-multiselect" id="cm-project-dropdown">
-            <button type="button" class="cm-multiselect-btn" id="cm-multiselect-trigger">
+          <details class="cm-project-filter-box">
+            <summary class="cm-project-filter-summary">
               <span id="cm-multiselect-label"><%= btn_text %></span>
-              <svg class="cm-multiselect-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+              <svg class="cm-project-filter-arrow" viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true">
                 <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.1 1.02l-4.25 4.5a.75.75 0 01-1.1 0L5.21 8.27a.75.75 0 01.02-1.06z"/>
               </svg>
-            </button>
-          </div>
-          <div class="cm-multiselect-panel" id="cm-multiselect-panel" style="display:none">
+            </summary>
+            <div class="cm-project-filter-body">
             <div class="cm-ms-tabs">
               <button type="button" class="cm-ms-tab cm-ms-tab-active" id="cm-tab-all">Todos los proyectos</button>
               <button type="button" class="cm-ms-tab" id="cm-tab-selected">Solo seleccionados</button>
@@ -95,10 +94,11 @@
               <% end %>
               <div class="cm-ms-footer-btns">
                 <button type="button" class="cm-ms-clear-btn" id="cm-ms-clear-btn">Borrar selección</button>
-                <button type="button" class="cm-multiselect-apply" id="cm-ms-apply-btn">Aplicar</button>
+                <button type="submit" class="cm-multiselect-apply">Aplicar</button>
               </div>
             </div>
-          </div>
+            </div>
+          </details>
         </div>
 
         <div class="cm-filter-group">
@@ -113,11 +113,6 @@
           </select>
         </div>
 
-        <div id="cm-hidden-project-ids">
-          <% active_ids.each do |pid| %>
-            <input type="hidden" name="project_ids[]" value="<%= pid %>" />
-          <% end %>
-        </div>
       </form>
     </div>
   </div>
@@ -190,9 +185,17 @@
     <div class="cm-section">
       <div class="cm-section-header">
         <h3>Capacidad por miembro (horas/día)</h3>
+        <% if @can_edit_capacity_management %>
         <button type="button" class="cm-btn-save" id="cm-save-capacity-btn" disabled>Guardar cambios</button>
+        <% end %>
       </div>
-      <p class="cm-capacity-help">Configura las horas disponibles por día y los días que cada miembro estará disponible en este sprint. La capacidad individual se calcula como <strong>horas/día × días disponibles</strong>.</p>
+      <p class="cm-capacity-help">
+        <% if @can_edit_capacity_management %>
+        Configura las horas disponibles por día y los días que cada miembro estará disponible en este sprint. La capacidad individual se calcula como <strong>horas/día × días disponibles</strong>.
+        <% else %>
+        Vista de consulta. Solo los usuarios con permiso de edición pueden modificar la capacidad del sprint.
+        <% end %>
+      </p>
       <div class="cm-table-wrap">
       <table class="cm-capacity-table">
         <thead><tr><th>Miembro</th><th class="cm-th-c">Horas/día</th><th class="cm-th-c">Días disponibles</th><th class="cm-th-c">Capacidad</th></tr></thead>
@@ -200,8 +203,8 @@
           <% @capacity_configs.each do |cfg| %>
             <tr>
               <td class="cm-td-user"><%= avatar(cfg[:user], size: "mini") %><span><%= cfg[:user_name] %></span></td>
-              <td class="cm-th-c"><input type="number" class="cm-capacity-input cm-input-hours" data-user-id="<%= cfg[:user_id] %>" data-field="hours" value="<%= cfg[:hours_per_day] %>" min="0.5" max="24" step="0.5" /></td>
-              <td class="cm-th-c"><input type="number" class="cm-capacity-input cm-input-days" data-user-id="<%= cfg[:user_id] %>" data-field="days" data-sprint-days="<%= cfg[:sprint_work_days] %>" value="<%= cfg[:available_days] %>" min="1" max="<%= cfg[:sprint_work_days] %>" step="1" title="Días hábiles del sprint: <%= cfg[:sprint_work_days] %>" /></td>
+              <td class="cm-th-c"><input type="number" class="cm-capacity-input cm-input-hours" data-user-id="<%= cfg[:user_id] %>" data-field="hours" value="<%= cfg[:hours_per_day] %>" min="0.5" max="24" step="0.5" <%= 'disabled' unless @can_edit_capacity_management %> /></td>
+              <td class="cm-th-c"><input type="number" class="cm-capacity-input cm-input-days" data-user-id="<%= cfg[:user_id] %>" data-field="days" data-sprint-days="<%= cfg[:sprint_work_days] %>" value="<%= cfg[:available_days] %>" min="1" max="<%= cfg[:sprint_work_days] %>" step="1" title="Días hábiles del sprint: <%= cfg[:sprint_work_days] %>" <%= 'disabled' unless @can_edit_capacity_management %> /></td>
               <td class="cm-th-c cm-capacity-preview" data-user-id="<%= cfg[:user_id] %>"><%= (cfg[:hours_per_day] * cfg[:available_days]).round(1) %>h</td>
             </tr>
           <% end %>
@@ -336,7 +339,7 @@
     <% end %>
 
     <%# ── Gráfica de evolución (selector) ── %>
-    <% if rd.size >= 2 %>
+    <% if rd.any? %>
     <div class="cm-section">
       <div class="cm-section-header">
         <h3>Evolución del equipo</h3>
@@ -361,6 +364,9 @@
           data-estimation="<%= h(rd.map { |d| d[:estimation_accuracy] || 0 }.to_json) %>">
         </canvas>
       </div>
+      <% if rd.size == 1 %>
+      <div class="cm-chart-note">Solo hay un sprint historico disponible. La grafica se muestra con ese unico punto de referencia.</div>
+      <% end %>
     </div>
     <% end %>
 
@@ -483,23 +489,25 @@
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 1.5 0V5Zm3.25-.75a.75.75 0 0 0-1.5 0v4.5a.75.75 0 0 0 1.5 0v-4.5Z"/></svg>
                 ¿Qué salió bien?
               </label>
-              <textarea class="cm-retro-textarea" data-field="went_well" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los logros, prácticas exitosas..."><%= rd[:retrospective]&.went_well %></textarea>
+              <textarea class="cm-retro-textarea" data-field="went_well" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los logros, prácticas exitosas..." <%= 'disabled' unless @can_edit_capacity_management %>><%= rd[:retrospective]&.went_well %></textarea>
             </div>
             <div class="cm-retro-field">
               <label class="cm-retro-label cm-retro-label-bad">
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm-.75 4v5a.75.75 0 0 0 1.5 0V4a.75.75 0 0 0-1.5 0ZM8 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
                 ¿Qué salió mal?
               </label>
-              <textarea class="cm-retro-textarea" data-field="went_wrong" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los obstáculos, bloqueos..."><%= rd[:retrospective]&.went_wrong %></textarea>
+              <textarea class="cm-retro-textarea" data-field="went_wrong" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los obstáculos, bloqueos..." <%= 'disabled' unless @can_edit_capacity_management %>><%= rd[:retrospective]&.went_wrong %></textarea>
             </div>
             <div class="cm-retro-field">
               <label class="cm-retro-label cm-retro-label-improve">
                 <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"/></svg>
                 ¿Qué podemos mejorar?
               </label>
-              <textarea class="cm-retro-textarea" data-field="improvements" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe las acciones de mejora..."><%= rd[:retrospective]&.improvements %></textarea>
+              <textarea class="cm-retro-textarea" data-field="improvements" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe las acciones de mejora..." <%= 'disabled' unless @can_edit_capacity_management %>><%= rd[:retrospective]&.improvements %></textarea>
             </div>
+            <% if @can_edit_capacity_management %>
             <button type="button" class="cm-btn-save cm-retro-save-btn" data-version-id="<%= rd[:sprint_id] %>" disabled>Guardar retrospectiva</button>
+            <% end %>
           </div>
         </div>
       <% end %>
@@ -580,13 +588,13 @@ body[data-color-mode="dark"] #cm-dashboard {
 .cm-filter-label { font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; }
 .cm-filter-select { padding: 5px 10px; border: 1px solid var(--cm-border); border-radius: 4px; font-size: 13px; cursor: pointer; background: var(--cm-bg-input); color: var(--cm-text-primary); min-width: 180px; }
 
-/* Multi-select */
-.cm-multiselect { position: relative; }
-.cm-multiselect-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid var(--cm-border); border-radius: 4px; font-size: 13px; background: var(--cm-bg-input); cursor: pointer; min-width: 220px; max-width: 320px; text-align: left; color: var(--cm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cm-multiselect-btn:hover { border-color: var(--cm-color-primary); }
-.cm-multiselect-btn:focus { outline: none; border-color: var(--cm-color-primary); box-shadow: 0 0 0 2px var(--cm-color-primary-focus); }
-.cm-multiselect-arrow { flex-shrink: 0; color: var(--cm-text-secondary); }
-.cm-multiselect-panel { position: fixed; z-index: 9999; background: var(--cm-bg-card); border: 1px solid var(--cm-border); border-radius: 6px; box-shadow: var(--cm-shadow-panel); width: 310px; overflow: hidden; }
+/* Project filter */
+.cm-project-filter-box { width: min(420px, calc(100vw - 64px)); background: var(--cm-bg-card); border: 1px solid var(--cm-border); border-radius: 6px; box-shadow: var(--cm-shadow); overflow: hidden; }
+.cm-project-filter-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: 13px; color: var(--cm-text-primary); background: var(--cm-bg-input); cursor: pointer; list-style: none; }
+.cm-project-filter-summary::-webkit-details-marker { display: none; }
+.cm-project-filter-arrow { flex-shrink: 0; color: var(--cm-text-secondary); transition: transform 0.15s ease; }
+.cm-project-filter-box[open] .cm-project-filter-arrow { transform: rotate(180deg); }
+.cm-project-filter-body { border-top: 1px solid var(--cm-border-light); }
 .cm-ms-tabs { display: flex; border-bottom: 1px solid var(--cm-border-light); }
 .cm-ms-tab { flex: 1; padding: 9px 10px; font-size: 12px; font-weight: 500; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; color: var(--cm-text-secondary); transition: color 0.1s; white-space: nowrap; }
 .cm-ms-tab:hover { color: var(--cm-text-primary); }
@@ -753,7 +761,7 @@ body[data-color-mode="dark"] #cm-dashboard {
   .cm-summary-cards { grid-template-columns: repeat(2, 1fr); }
   .cm-filters-form { flex-direction: column; }
   .cm-sprint-info-details { flex-direction: column; gap: 12px; }
-  .cm-multiselect-panel { width: calc(100vw - 32px); max-width: 360px; }
+  .cm-project-filter-box { width: calc(100vw - 32px); max-width: 360px; }
   .cm-multiselect-btn { min-width: 180px; }
   .cm-section { padding: 16px; }
   .cm-burndown-stats-row { gap: 16px; }
@@ -815,7 +823,7 @@ body[data-color-mode="dark"] #cm-dashboard {
   .cm-capacity-table tbody tr { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--cm-border-row); align-items: center; }
   .cm-capacity-table td { display: block; padding: 0; border-bottom: none; }
   .cm-capacity-table td:first-child { width: 100%; margin-bottom: 4px; }
-  .cm-multiselect-panel { width: calc(100vw - 24px); max-width: none; left: 12px !important; right: 12px !important; }
+  .cm-project-filter-box { width: calc(100vw - 24px); max-width: none; }
   .cm-btn-save { width: 100%; text-align: center; padding: 10px 16px; }
   .cm-retro-charts-grid { grid-template-columns: 1fr; }
   .cm-kpi-grid { grid-template-columns: 1fr; }
@@ -827,6 +835,7 @@ body[data-color-mode="dark"] #cm-dashboard {
 
 /* Chart selector */
 .cm-chart-select { min-width: 160px; font-size: 12px; padding: 4px 8px; }
+.cm-chart-note { margin-top: 10px; color: var(--cm-text-secondary); font-size: 12px; }
 
 /* Badges semáforo KPI */
 .cm-retro-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; cursor: help; }

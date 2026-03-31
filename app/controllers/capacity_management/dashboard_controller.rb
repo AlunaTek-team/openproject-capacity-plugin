@@ -1,7 +1,10 @@
 module CapacityManagement
   class DashboardController < ::ApplicationController
+    authorization_checked! :index, :data, :save_capacity, :save_retrospective
+
     before_action :find_project_by_project_id
-    before_action :authorize
+    before_action :authorize_read_access, only: %i[index data]
+    before_action :authorize_edit_access, only: %i[save_capacity save_retrospective]
     before_action :load_sprint
     before_action :load_project_filter
 
@@ -9,6 +12,7 @@ module CapacityManagement
       @sprints            = load_filtered_sprints
       @available_projects = available_projects_list
       @active_tab         = params[:tab] || 'capacity'
+      @can_edit_capacity_management = can_edit_capacity_management?
 
       # Capacity tab data
       @sprint_info      = build_sprint_info
@@ -76,6 +80,27 @@ module CapacityManagement
 
     private
 
+    def authorize_read_access
+      return if can_view_capacity_management?
+
+      deny_access
+    end
+
+    def authorize_edit_access
+      return if can_edit_capacity_management?
+
+      deny_access
+    end
+
+    def can_view_capacity_management?
+      User.current.allowed_in_project?(:view_capacity_management, @project) ||
+        User.current.allowed_in_project?(:view_work_packages, @project)
+    end
+
+    def can_edit_capacity_management?
+      User.current.allowed_in_project?(:edit_capacity_management, @project)
+    end
+
     # ── Filtro de proyectos ────────────────────────────────────────────────
     def load_project_filter
       @project_filter_mode = params[:project_filter] || 'current'
@@ -113,12 +138,7 @@ module CapacityManagement
     end
 
     def load_filtered_sprints
-      projects = filtered_projects
-      project_ids = projects.map(&:id)
-
-      Version.where(project_id: project_ids)
-             .distinct
-             .order(effective_date: :desc)
+      shared_versions_for(filtered_projects)
     end
 
     # ── Cargar sprint activo ──────────────────────────────────────────────
@@ -129,7 +149,7 @@ module CapacityManagement
 
       return if @sprint
 
-      sprints = @project.versions.order(:effective_date)
+      sprints = shared_versions_for([@project]).order(:effective_date)
       @sprint = sprints.where('effective_date >= ?', Date.today).first
       @sprint ||= sprints.order(effective_date: :desc).first
     end
@@ -370,10 +390,20 @@ module CapacityManagement
     # ══════════════════════════════════════════════════════════════════════
 
     def load_past_sprints
-      project_ids = filtered_projects.map(&:id)
-      Version.where(project_id: project_ids)
-             .where.not(status: 'open')
-             .or(Version.where(project_id: project_ids).where('effective_date < ?', Date.today))
+      shared_versions_for(filtered_projects)
+        .where.not(status: 'open')
+        .or(shared_versions_for(filtered_projects).where('effective_date < ?', Date.today))
+        .distinct
+        .order(effective_date: :desc)
+    end
+
+    def shared_versions_for(projects)
+      version_ids = projects.flat_map do |project|
+        Version.shared_with(project).pluck(:id)
+      end.uniq
+
+      Version.visible(User.current)
+             .where(id: version_ids)
              .distinct
              .order(effective_date: :desc)
     end

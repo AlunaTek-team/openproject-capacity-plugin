@@ -46,7 +46,12 @@ module OpenProject
              caption: 'Capacidad y Carga',
              param: :project_id,
              icon: 'graph',
-             after: :overview
+             after: :overview,
+             if: ->(project) do
+               user = User.current
+               user.allowed_in_project?(:view_capacity_management, project) ||
+                 user.allowed_in_project?(:view_work_packages, project)
+             end
       end
     end
   end

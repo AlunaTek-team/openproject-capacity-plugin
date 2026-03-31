@@ -1,7 +1,6 @@
 (function () {
   'use strict';
 
-  var retroChartsInitialized = false;
   var listenersRegistered = false;
   var currentChart = null;
 
@@ -130,7 +129,7 @@
         config = { type: 'bar', data: { labels: labels, datasets: [] }, options: barOptions(t, '') };
     }
 
-    try { currentChart = new Chart(ctx, config); } catch (e) { }
+    try { currentChart = new Chart(ctx, config); } catch (e) { console.error('CapacityManagement retrospective chart error', e); }
   }
 
   function barOptions(t, unit) {
@@ -153,6 +152,14 @@
         x: { grid: { display: false }, ticks: { color: t.tickColor, maxRotation: 45 } }
       }
     };
+  }
+
+  function bindOnce(element, bindingName, eventName, handler) {
+    if (!element) return;
+    var attr = 'data-cm-bound-' + bindingName;
+    if (element.getAttribute(attr) === '1') return;
+    element.setAttribute(attr, '1');
+    element.addEventListener(eventName, handler);
   }
 
   // ── Modal ──────────────────────────────────────────────────────────────────
@@ -213,29 +220,6 @@
     });
   }
 
-  // ── Multi-select dropdown ──────────────────────────────────────────────────
-  function cmOpenPanel() {
-    var panel = document.getElementById('cm-multiselect-panel');
-    var btn = document.getElementById('cm-multiselect-trigger');
-    if (!panel || !btn) return;
-    var rect = btn.getBoundingClientRect();
-    panel.style.top = (rect.bottom + 4) + 'px';
-    panel.style.left = rect.left + 'px';
-    panel.style.display = 'block';
-    var pw = panel.offsetWidth;
-    if (rect.left + pw > window.innerWidth - 8) {
-      panel.style.left = Math.max(8, rect.right - pw) + 'px';
-    }
-    var search = document.getElementById('cm-ms-search');
-    if (search) { search.value = ''; cmFilterProjects(''); }
-    cmSwitchTab('all');
-  }
-
-  function cmClosePanel() {
-    var panel = document.getElementById('cm-multiselect-panel');
-    if (panel) panel.style.display = 'none';
-  }
-
   function cmSwitchTab(tab) {
     var allBtn = document.getElementById('cm-tab-all');
     var selBtn = document.getElementById('cm-tab-selected');
@@ -278,9 +262,6 @@
   }
 
   function cmApplyFilter() {
-    var hiddenDiv = document.getElementById('cm-hidden-project-ids');
-    if (hiddenDiv) hiddenDiv.innerHTML = '';
-    cmClosePanel();
     document.getElementById('cm-filters-form').submit();
   }
 
@@ -288,25 +269,6 @@
   function registerGlobalListeners() {
     if (listenersRegistered) return;
     listenersRegistered = true;
-
-    document.addEventListener('click', function (e) {
-      var panel = document.getElementById('cm-multiselect-panel');
-      var btn = document.getElementById('cm-multiselect-trigger');
-      if (!panel || panel.style.display === 'none') return;
-      if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
-      cmClosePanel();
-    });
-
-    window.addEventListener('scroll', function () {
-      var panel = document.getElementById('cm-multiselect-panel');
-      var btn = document.getElementById('cm-multiselect-trigger');
-      if (!panel || panel.style.display === 'none' || !btn) return;
-      var rect = btn.getBoundingClientRect();
-      panel.style.top = (rect.bottom + 4) + 'px';
-      panel.style.left = rect.left + 'px';
-    }, true);
-
-    window.addEventListener('resize', cmClosePanel);
 
     // Modal close
     document.addEventListener('click', function (e) {
@@ -331,136 +293,103 @@
 
     registerGlobalListeners();
 
-    try { initBurndownChart(); } catch (e) { }
+    try { initBurndownChart(); } catch (e) { console.error('CapacityManagement burndown chart error', e); }
 
     // Chart selector
     var chartSel = document.getElementById('cm-chart-selector');
     if (chartSel) {
       renderRetroChart(chartSel.value);
-      chartSel.addEventListener('change', function () { renderRetroChart(this.value); });
+      bindOnce(chartSel, 'chart-selector-change', 'change', function () { renderRetroChart(this.value); });
     }
 
     // Retro detail buttons
     document.querySelectorAll('.cm-retro-detail-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
+      bindOnce(btn, 'retro-detail-click', 'click', function () {
         var vid = btn.getAttribute('data-version-id');
         var sname = btn.getAttribute('data-sprint-name');
         openRetroModal(vid, sname);
       });
     });
 
-    // Dropdown trigger
-    var trigger = document.getElementById('cm-multiselect-trigger');
-    if (trigger) {
-      trigger.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var panel = document.getElementById('cm-multiselect-panel');
-        if (panel && panel.style.display !== 'none') cmClosePanel(); else cmOpenPanel();
-      });
-    }
-
     var tabAll = document.getElementById('cm-tab-all');
     var tabSel = document.getElementById('cm-tab-selected');
-    if (tabAll) tabAll.addEventListener('click', function () { cmSwitchTab('all'); });
-    if (tabSel) tabSel.addEventListener('click', function () { cmSwitchTab('selected'); });
+    bindOnce(tabAll, 'tab-all-click', 'click', function () { cmSwitchTab('all'); });
+    bindOnce(tabSel, 'tab-selected-click', 'click', function () { cmSwitchTab('selected'); });
 
     var search = document.getElementById('cm-ms-search');
-    if (search) search.addEventListener('input', function () { cmFilterProjects(this.value); });
+    bindOnce(search, 'project-search-input', 'input', function () { cmFilterProjects(this.value); });
 
     var msList = document.getElementById('cm-ms-list');
-    if (msList) {
-      msList.addEventListener('change', function (e) {
-        if (e.target.name === 'project_ids[]') {
-          cmUpdateSubprojectsCheckbox();
-          cmUpdateButtonLabel();
-        }
-      });
-    }
+    bindOnce(msList, 'project-list-change', 'change', function (e) {
+      if (e.target.name === 'project_ids[]') {
+        cmUpdateSubprojectsCheckbox();
+        cmUpdateButtonLabel();
+      }
+    });
 
     var includeSub = document.getElementById('cm-include-sub');
-    if (includeSub) {
-      includeSub.addEventListener('change', function () {
-        document.querySelectorAll('#cm-ms-list input[data-is-child="true"]').forEach(function (cb) { cb.checked = includeSub.checked; });
-        cmUpdateButtonLabel();
-      });
-    }
+    bindOnce(includeSub, 'include-sub-change', 'change', function () {
+      document.querySelectorAll('#cm-ms-list input[data-is-child="true"]').forEach(function (cb) { cb.checked = includeSub.checked; });
+      cmUpdateButtonLabel();
+    });
 
     var clearBtn = document.getElementById('cm-ms-clear-btn');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', function () {
-        document.querySelectorAll('#cm-ms-list input[name="project_ids[]"]').forEach(function (cb) { cb.checked = false; });
-        if (includeSub) includeSub.checked = false;
-        cmUpdateButtonLabel();
-        cmSwitchTab('all');
-      });
-    }
+    bindOnce(clearBtn, 'clear-projects-click', 'click', function () {
+      document.querySelectorAll('#cm-ms-list input[name="project_ids[]"]').forEach(function (cb) { cb.checked = false; });
+      if (includeSub) includeSub.checked = false;
+      cmUpdateButtonLabel();
+      cmSwitchTab('all');
+    });
 
-    var applyBtn = document.getElementById('cm-ms-apply-btn');
-    if (applyBtn) applyBtn.addEventListener('click', cmApplyFilter);
+    cmUpdateButtonLabel();
+    cmUpdateSubprojectsCheckbox();
+    cmSwitchTab('all');
 
     var sprintSelect = document.getElementById('cm-sprint-select');
-    if (sprintSelect) {
-      sprintSelect.addEventListener('change', function () {
-        var items = document.querySelectorAll('#cm-ms-list input[name="project_ids[]"]:checked');
-        var hiddenDiv = document.getElementById('cm-hidden-project-ids');
-        if (hiddenDiv) {
-          hiddenDiv.innerHTML = '';
-          items.forEach(function (cb) {
-            var inp = document.createElement('input');
-            inp.type = 'hidden'; inp.name = 'project_ids[]'; inp.value = cb.value;
-            hiddenDiv.appendChild(inp);
-          });
-          items.forEach(function (cb) { cb.disabled = true; });
-        }
-        document.getElementById('cm-filters-form').submit();
-      });
-    }
+    bindOnce(sprintSelect, 'sprint-select-change', 'change', function () {
+      document.getElementById('cm-filters-form').submit();
+    });
 
     // Capacity
     var capTable = document.querySelector('.cm-capacity-table');
-    if (capTable) {
-      capTable.addEventListener('change', function (e) {
-        if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) {
-          updatePreview(e.target);
-        }
-      });
-      capTable.addEventListener('input', function (e) {
-        if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) {
-          updatePreview(e.target);
-        }
-      });
-    }
+    bindOnce(capTable, 'capacity-table-change', 'change', function (e) {
+      if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) {
+        updatePreview(e.target);
+      }
+    });
+    bindOnce(capTable, 'capacity-table-input', 'input', function (e) {
+      if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) {
+        updatePreview(e.target);
+      }
+    });
 
     var saveBtn = document.getElementById('cm-save-capacity-btn');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', function () {
-        var dash = document.getElementById('cm-dashboard');
-        var sprintId = dash ? dash.getAttribute('data-sprint-id') : null;
-        var savePath = dash ? dash.getAttribute('data-save-path') : null;
-        if (!sprintId || !savePath) return;
-        var rows = document.querySelectorAll('.cm-capacity-table tbody tr');
-        var configs = [];
-        rows.forEach(function (row) {
-          var hi = row.querySelector('.cm-input-hours');
-          var di = row.querySelector('.cm-input-days');
-          if (!hi) return;
-          configs.push({ user_id: parseInt(hi.dataset.userId), hours_per_day: parseFloat(hi.value) || 8.0, available_days: di ? (parseInt(di.value) || null) : null });
-        });
-        var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
-        fetch(savePath, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ sprint_id: parseInt(sprintId), capacity_configs: configs })
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.success) { saveBtn.disabled = true; location.reload(); }
-          else alert('Error al guardar: ' + (data.error || 'Error desconocido'));
-        })
-        .catch(function (err) { alert('Error de conexion: ' + err.message); });
+    bindOnce(saveBtn, 'save-capacity-click', 'click', function () {
+      var dash = document.getElementById('cm-dashboard');
+      var sprintId = dash ? dash.getAttribute('data-sprint-id') : null;
+      var savePath = dash ? dash.getAttribute('data-save-path') : null;
+      if (!sprintId || !savePath) return;
+      var rows = document.querySelectorAll('.cm-capacity-table tbody tr');
+      var configs = [];
+      rows.forEach(function (row) {
+        var hi = row.querySelector('.cm-input-hours');
+        var di = row.querySelector('.cm-input-days');
+        if (!hi) return;
+        configs.push({ user_id: parseInt(hi.dataset.userId), hours_per_day: parseFloat(hi.value) || 8.0, available_days: di ? (parseInt(di.value) || null) : null });
       });
-    }
+      var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+      fetch(savePath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ sprint_id: parseInt(sprintId), capacity_configs: configs })
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) { saveBtn.disabled = true; location.reload(); }
+        else alert('Error al guardar: ' + (data.error || 'Error desconocido'));
+      })
+      .catch(function (err) { alert('Error de conexion: ' + err.message); });
+    });
   }
 
   function updatePreview(input) {
