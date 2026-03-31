@@ -252,7 +252,7 @@ module CapacityManagement
 
         wp_filters = CGI.escape(
           { f: [
-              { n: 'assignee', o: '=', v: [user.id.to_s] },
+              { n: 'assignee_or_group', o: '=', v: [user.id.to_s] },
               { n: 'version',  o: '=', v: [@sprint.id.to_s] }
             ]
           }.to_json
@@ -379,7 +379,7 @@ module CapacityManagement
     end
 
     def build_retrospective_data
-      sprints = load_past_sprints
+      sprints = @past_sprints || load_past_sprints
       project_ids = filtered_projects.map(&:id)
 
       sprints.map do |sp|

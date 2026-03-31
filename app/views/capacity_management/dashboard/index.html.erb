@@ -11,16 +11,16 @@
     </div>
 
     <%# ── Pestañas ── %>
-    <div class="cm-tabs" id="cm-tabs">
-      <button class="cm-tab <%= 'cm-tab-active' if @active_tab == 'capacity' %>" data-tab="capacity">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M1.5 1.75V13.5h13V1.75H1.5Zm-1.5 0C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v11.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25V1.75ZM5 11V5h1.5v6H5Zm3.5 0V7.5H10V11H8.5ZM12 11V4h1.5v7H12Z"/></svg>
+    <nav class="cm-tabs">
+      <a href="<%= capacity_management_dashboard_path(project_id: @project.identifier, tab: 'capacity', sprint_id: params[:sprint_id], project_filter: params[:project_filter], project_ids: params[:project_ids]) %>"
+         class="cm-tab <%= 'cm-tab-active' if @active_tab == 'capacity' %>">
         Capacidad y Carga
-      </button>
-      <button class="cm-tab <%= 'cm-tab-active' if @active_tab == 'retrospective' %>" data-tab="retrospective">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM8 4a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 4Z"/></svg>
+      </a>
+      <a href="<%= capacity_management_dashboard_path(project_id: @project.identifier, tab: 'retrospective', sprint_id: params[:sprint_id], project_filter: params[:project_filter], project_ids: params[:project_ids]) %>"
+         class="cm-tab <%= 'cm-tab-active' if @active_tab == 'retrospective' %>">
         Retrospectiva
-      </button>
-    </div>
+      </a>
+    </nav>
 
     <%# ── Filtros ── %>
     <div class="cm-filters-row">
@@ -304,86 +304,67 @@
       </div>
     <% else %>
 
-    <%# ── Gráficas de evolución ── %>
-    <% if @retrospective_data.size >= 2 %>
-    <div class="cm-section">
-      <div class="cm-section-header"><h3>Evolución del equipo</h3></div>
-      <div class="cm-retro-charts-grid">
-        <div class="cm-retro-chart-card">
-          <div class="cm-retro-chart-title">Velocidad (horas completadas)</div>
-          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-velocity-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:velocity] } }.to_json %>"></canvas></div>
-        </div>
-        <div class="cm-retro-chart-card">
-          <div class="cm-retro-chart-title">Tareas cerradas por sprint</div>
-          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-throughput-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:throughput] } }.to_json %>"></canvas></div>
-        </div>
-        <div class="cm-retro-chart-card">
-          <div class="cm-retro-chart-title">Predictibilidad (% cumplido)</div>
-          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-predictability-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:predictability] } }.to_json %>"></canvas></div>
-        </div>
-        <div class="cm-retro-chart-card">
-          <div class="cm-retro-chart-title">Tasa de completado (%)</div>
-          <div class="cm-chart-wrap cm-chart-wrap-sm"><canvas id="cm-completion-chart" data-chart="<%= { labels: @retrospective_data.map { |d| d[:sprint_name] }, values: @retrospective_data.map { |d| d[:completion_rate] } }.to_json %>"></canvas></div>
-        </div>
-      </div>
-    </div>
-    <% end %>
-
     <%# ── Tarjetas KPI resumen ── %>
-    <% if @retrospective_data.any? %>
     <% rd = @retrospective_data %>
+    <% if rd.any? %>
+    <% avg_vel = (rd.sum { |d| d[:velocity] } / rd.size).round(1) %>
+    <% avg_pred = (rd.sum { |d| d[:predictability] } / rd.size).round(1) %>
+    <% total_tp = rd.sum { |d| d[:throughput] } %>
+    <% avg_comp = (rd.sum { |d| d[:completion_rate] } / rd.size).round(1) %>
     <div class="cm-summary-cards">
-      <div class="cm-card">
-        <div class="cm-card-label">Sprints analizados</div>
-        <div class="cm-card-value"><%= rd.size %></div>
-        <div class="cm-card-sub">proyectos filtrados</div>
-      </div>
-      <div class="cm-card">
+      <div class="cm-card" title="Horas de trabajo completadas por sprint. Un valor estable sugiere un equipo maduro en estimación.">
         <div class="cm-card-label">Velocity promedio</div>
-        <div class="cm-card-value"><%= (rd.sum { |d| d[:velocity] } / rd.size).round(1) %>h</div>
+        <div class="cm-card-value"><%= avg_vel %>h</div>
         <div class="cm-card-sub">horas completadas / sprint</div>
       </div>
-      <div class="cm-card">
+      <div class="cm-card" title="% del trabajo comprometido completado. >85% excelente · 70-85% bueno · <70% revisar planificación">
         <div class="cm-card-label">Predictibilidad promedio</div>
-        <div class="cm-card-value"><%= (rd.sum { |d| d[:predictability] } / rd.size).round(1) %>%</div>
+        <div class="cm-card-value"><%= avg_pred %>%</div>
         <div class="cm-card-sub">compromiso cumplido</div>
       </div>
-      <div class="cm-card">
+      <div class="cm-card" title="Número de tareas cerradas en total.">
         <div class="cm-card-label">Throughput total</div>
-        <div class="cm-card-value"><%= rd.sum { |d| d[:throughput] } %></div>
+        <div class="cm-card-value"><%= total_tp %></div>
         <div class="cm-card-sub">tareas cerradas</div>
+      </div>
+      <div class="cm-card" title="% promedio de tareas cerradas por sprint. >90% excelente · 75-90% bueno · <75% sobrecarga">
+        <div class="cm-card-label">Completado promedio</div>
+        <div class="cm-card-value"><%= avg_comp %>%</div>
+        <div class="cm-card-sub">tareas cerradas / sprint</div>
       </div>
     </div>
     <% end %>
 
-    <%# ── KPI Legend ── %>
+    <%# ── Gráfica de evolución (selector) ── %>
+    <% if rd.size >= 2 %>
     <div class="cm-section">
-      <div class="cm-section-header"><h3>¿Qué significan estos KPIs?</h3></div>
-      <div class="cm-kpi-grid">
-        <div class="cm-kpi-card">
-          <div class="cm-kpi-name">Velocity</div>
-          <div class="cm-kpi-desc">Horas de trabajo completadas en el sprint. Indica la capacidad real del equipo por sprint. Un valor estable sugiere un equipo maduro en estimación.</div>
-          <div class="cm-kpi-bench"><strong>Referencia:</strong> Comparar con sprints anteriores. No hay un valor "bueno" universal; lo importante es la tendencia.</div>
-        </div>
-        <div class="cm-kpi-card">
-          <div class="cm-kpi-name">Predictibilidad</div>
-          <div class="cm-kpi-desc">% del trabajo comprometido que fue completado. Mide qué tan bien el equipo cumple sus compromisos.</div>
-          <div class="cm-kpi-bench"><strong>Referencia:</strong> &gt;85% = excelente · 70-85% = bueno · &lt;70% = revisar planificación</div>
-        </div>
-        <div class="cm-kpi-card">
-          <div class="cm-kpi-name">Throughput</div>
-          <div class="cm-kpi-desc">Número de tareas cerradas en el sprint. Refleja la productividad del equipo en cantidad de entregables.</div>
-          <div class="cm-kpi-bench"><strong>Referencia:</strong> Depende del tamaño de las tareas. Combinar con velocity para contexto.</div>
-        </div>
-        <div class="cm-kpi-card">
-          <div class="cm-kpi-name">Tasa de completado</div>
-          <div class="cm-kpi-desc">% de tareas del sprint que fueron cerradas. Similar a predictibilidad pero basada en conteo de tareas, no en horas.</div>
-          <div class="cm-kpi-bench"><strong>Referencia:</strong> &gt;90% = excelente · 75-90% = bueno · &lt;75% = posible sobrecarga</div>
-        </div>
+      <div class="cm-section-header">
+        <h3>Evolución del equipo</h3>
+        <select id="cm-chart-selector" class="cm-filter-select cm-chart-select">
+          <option value="velocity">Velocity</option>
+          <option value="throughput">Tareas cerradas</option>
+          <option value="predictability">Predictibilidad</option>
+          <option value="completion">Tasa de completado</option>
+          <option value="hours">Horas estimadas vs completadas</option>
+          <option value="estimation">Precisión de estimación</option>
+        </select>
+      </div>
+      <div id="cm-chart-container" style="height:300px;position:relative;">
+        <canvas id="cm-retro-chart"
+          data-labels="<%= h(rd.map { |d| d[:sprint_name] }.to_json) %>"
+          data-velocity="<%= h(rd.map { |d| d[:velocity] }.to_json) %>"
+          data-throughput="<%= h(rd.map { |d| d[:throughput] }.to_json) %>"
+          data-predictability="<%= h(rd.map { |d| d[:predictability] }.to_json) %>"
+          data-completion="<%= h(rd.map { |d| d[:completion_rate] }.to_json) %>"
+          data-estimated="<%= h(rd.map { |d| d[:total_hours] }.to_json) %>"
+          data-completed="<%= h(rd.map { |d| d[:closed_hours] }.to_json) %>"
+          data-estimation="<%= h(rd.map { |d| d[:estimation_accuracy] || 0 }.to_json) %>">
+        </canvas>
       </div>
     </div>
+    <% end %>
 
-    <%# ── Tabla de sprints pasados ── %>
+    <%# ── Tabla historial de sprints con badges semáforo ── %>
     <div class="cm-section">
       <div class="cm-section-header"><h3>Historial de sprints</h3></div>
       <div class="cm-table-wrap">
@@ -396,12 +377,20 @@
             <th class="cm-th-r">Cerradas</th>
             <th class="cm-th-r">Horas estim.</th>
             <th class="cm-th-r">Horas compl.</th>
-            <th class="cm-th-r">Velocity</th>
-            <th class="cm-th-r">Predictib.</th>
+            <th class="cm-th-r" title="Horas completadas">Velocity</th>
+            <th class="cm-th-r" title="% compromiso cumplido">Predictib.</th>
+            <th class="cm-th-r" title="% tareas cerradas">Completado</th>
+            <th class="cm-th-r" title="% horas reales vs estimadas">Precisión</th>
           </tr>
         </thead>
         <tbody>
           <% @retrospective_data.each do |rd| %>
+            <%
+              pred_cls = rd[:predictability] >= 85 ? 'green' : rd[:predictability] >= 70 ? 'yellow' : 'red'
+              comp_cls = rd[:completion_rate] >= 90 ? 'green' : rd[:completion_rate] >= 75 ? 'yellow' : 'red'
+              acc_val = rd[:estimation_accuracy]
+              acc_cls = acc_val.nil? ? 'gray' : (acc_val >= 80 && acc_val <= 120 ? 'green' : (acc_val >= 60 && acc_val <= 140 ? 'yellow' : 'red'))
+            %>
             <tr>
               <td class="cm-td-sprint-name"><%= rd[:sprint_name] %><% if rd[:start_date] %><div class="cm-td-sprint-dates"><%= rd[:start_date] %> - <%= rd[:end_date] %></div><% end %></td>
               <td><span class="cm-retro-status cm-retro-status-<%= rd[:status] %>"><%= rd[:status] == 'closed' ? 'Cerrado' : rd[:status] == 'locked' ? 'Bloqueado' : 'Pasado' %></span></td>
@@ -410,7 +399,9 @@
               <td class="cm-th-r"><%= rd[:total_hours] %>h</td>
               <td class="cm-th-r cm-td-done"><%= rd[:closed_hours] %>h</td>
               <td class="cm-th-r"><%= rd[:velocity] %>h</td>
-              <td class="cm-th-r"><%= rd[:predictability] %>%</td>
+              <td class="cm-th-r"><span class="cm-retro-badge cm-retro-badge-<%= pred_cls %>" title="<%= rd[:predictability] %>% del compromiso cumplido"><%= rd[:predictability] %>%</span></td>
+              <td class="cm-th-r"><span class="cm-retro-badge cm-retro-badge-<%= comp_cls %>" title="<%= rd[:completion_rate] %>% de tareas cerradas"><%= rd[:completion_rate] %>%</span></td>
+              <td class="cm-th-r"><span class="cm-retro-badge cm-retro-badge-<%= acc_cls %>" title="<%= acc_val ? "#{acc_val}% (100%=perfecto)" : 'Sin datos' %>"><%= acc_val ? "#{acc_val}%" : '-' %></span></td>
             </tr>
           <% end %>
         </tbody>
@@ -418,67 +409,101 @@
       </div>
     </div>
 
-    <%# ── Retrospectivas por sprint ── %>
-    <% @retrospective_data.each do |rd| %>
-    <div class="cm-section cm-retro-sprint" data-version-id="<%= rd[:sprint_id] %>">
-      <div class="cm-section-header">
-        <h3>Retrospectiva: <%= rd[:sprint_name] %></h3>
-        <% if rd[:start_date] %><span class="cm-retro-date"><%= rd[:start_date] %> - <%= rd[:end_date] %></span><% end %>
-      </div>
-
-      <%# KPIs del sprint %>
-      <div class="cm-retro-kpi-row">
-        <div class="cm-retro-kpi" title="Horas de trabajo completadas en el sprint">
-          <span class="cm-retro-kpi-val"><%= rd[:velocity] %>h</span>
-          <span class="cm-retro-kpi-label">Velocity</span>
-        </div>
-        <div class="cm-retro-kpi" title="% del trabajo comprometido que fue completado">
-          <span class="cm-retro-kpi-val"><%= rd[:predictability] %>%</span>
-          <span class="cm-retro-kpi-label">Predictibilidad</span>
-        </div>
-        <div class="cm-retro-kpi" title="Número de tareas cerradas">
-          <span class="cm-retro-kpi-val"><%= rd[:throughput] %></span>
-          <span class="cm-retro-kpi-label">Throughput</span>
-        </div>
-        <div class="cm-retro-kpi" title="% de tareas cerradas sobre el total">
-          <span class="cm-retro-kpi-val"><%= rd[:completion_rate] %>%</span>
-          <span class="cm-retro-kpi-label">Completado</span>
-        </div>
-        <% if rd[:estimation_accuracy] %>
-        <div class="cm-retro-kpi" title="% de horas reales vs estimadas (100% = estimación perfecta)">
-          <span class="cm-retro-kpi-val"><%= rd[:estimation_accuracy] %>%</span>
-          <span class="cm-retro-kpi-label">Precisión est.</span>
-        </div>
-        <% end %>
-      </div>
-
-      <%# Campos de retrospectiva %>
-      <div class="cm-retro-fields">
-        <div class="cm-retro-field">
-          <label class="cm-retro-label cm-retro-label-good">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 1.5 0V5Zm3.25-.75a.75.75 0 0 0-1.5 0v4.5a.75.75 0 0 0 1.5 0v-4.5Z"/></svg>
-            ¿Qué salió bien?
-          </label>
-          <textarea class="cm-retro-textarea" data-field="went_well" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los logros, prácticas exitosas, fortalezas del equipo..."><%= rd[:retrospective]&.went_well %></textarea>
-        </div>
-        <div class="cm-retro-field">
-          <label class="cm-retro-label cm-retro-label-bad">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm-.75 4v5a.75.75 0 0 0 1.5 0V4a.75.75 0 0 0-1.5 0ZM8 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
-            ¿Qué salió mal?
-          </label>
-          <textarea class="cm-retro-textarea" data-field="went_wrong" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los obstáculos, bloqueos, problemas encontrados..."><%= rd[:retrospective]&.went_wrong %></textarea>
-        </div>
-        <div class="cm-retro-field">
-          <label class="cm-retro-label cm-retro-label-improve">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"/></svg>
-            ¿Qué podemos mejorar?
-          </label>
-          <textarea class="cm-retro-textarea" data-field="improvements" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe las acciones de mejora para el próximo sprint..."><%= rd[:retrospective]&.improvements %></textarea>
-        </div>
-        <button type="button" class="cm-btn-save cm-retro-save-btn" data-version-id="<%= rd[:sprint_id] %>" disabled>Guardar retrospectiva</button>
+    <%# ── Tabla resumen de retrospectivas ── %>
+    <div class="cm-section">
+      <div class="cm-section-header"><h3>Retrospectivas</h3></div>
+      <div class="cm-table-wrap">
+      <table class="cm-retro-table">
+        <thead>
+          <tr>
+            <th>Sprint</th>
+            <th class="cm-th-c">Bien</th>
+            <th class="cm-th-c">Mal</th>
+            <th class="cm-th-c">Mejoras</th>
+            <th class="cm-th-c">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @retrospective_data.each do |rd| %>
+            <% retro = rd[:retrospective] %>
+            <% has_content = retro&.went_well.present? || retro&.went_wrong.present? || retro&.improvements.present? %>
+            <tr>
+              <td class="cm-td-sprint-name"><%= rd[:sprint_name] %><% if rd[:start_date] %><div class="cm-td-sprint-dates"><%= rd[:start_date] %> - <%= rd[:end_date] %></div><% end %></td>
+              <td class="cm-th-c">
+                <% if retro&.went_well.present? %>
+                  <span class="cm-retro-icon cm-retro-icon-good" title="<%= h(retro.went_well.truncate(100)) %>">+</span>
+                <% else %>
+                  <span class="cm-retro-icon-empty">-</span>
+                <% end %>
+              </td>
+              <td class="cm-th-c">
+                <% if retro&.went_wrong.present? %>
+                  <span class="cm-retro-icon cm-retro-icon-bad" title="<%= h(retro.went_wrong.truncate(100)) %>">x</span>
+                <% else %>
+                  <span class="cm-retro-icon-empty">-</span>
+                <% end %>
+              </td>
+              <td class="cm-th-c">
+                <% if retro&.improvements.present? %>
+                  <span class="cm-retro-icon cm-retro-icon-improve" title="<%= h(retro.improvements.truncate(100)) %>">&rarr;</span>
+                <% else %>
+                  <span class="cm-retro-icon-empty">-</span>
+                <% end %>
+              </td>
+              <td class="cm-th-c">
+                <button type="button" class="cm-retro-detail-btn" data-version-id="<%= rd[:sprint_id] %>" data-sprint-name="<%= rd[:sprint_name] %>">
+                  Ver detalle
+                </button>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
       </div>
     </div>
-    <% end %>
+
+    <%# ── Modal de retrospectiva ── %>
+    <div id="cm-retro-modal" class="cm-modal-overlay" style="display:none">
+      <div class="cm-modal">
+        <div class="cm-modal-header">
+          <h3 id="cm-modal-title">Retrospectiva</h3>
+          <button type="button" class="cm-modal-close" id="cm-modal-close">&times;</button>
+        </div>
+        <div class="cm-modal-body" id="cm-modal-body"></div>
+      </div>
+    </div>
+
+    <%# Templates ocultos para el modal %>
+    <div style="display:none">
+      <% @retrospective_data.each do |rd| %>
+        <div id="cm-retro-template-<%= rd[:sprint_id] %>" data-version-id="<%= rd[:sprint_id] %>">
+          <div class="cm-retro-fields">
+            <div class="cm-retro-field">
+              <label class="cm-retro-label cm-retro-label-good">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5a.75.75 0 0 0-1.5 0v4a.75.75 0 0 0 1.5 0V5Zm3.25-.75a.75.75 0 0 0-1.5 0v4.5a.75.75 0 0 0 1.5 0v-4.5Z"/></svg>
+                ¿Qué salió bien?
+              </label>
+              <textarea class="cm-retro-textarea" data-field="went_well" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los logros, prácticas exitosas..."><%= rd[:retrospective]&.went_well %></textarea>
+            </div>
+            <div class="cm-retro-field">
+              <label class="cm-retro-label cm-retro-label-bad">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm-.75 4v5a.75.75 0 0 0 1.5 0V4a.75.75 0 0 0-1.5 0ZM8 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>
+                ¿Qué salió mal?
+              </label>
+              <textarea class="cm-retro-textarea" data-field="went_wrong" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe los obstáculos, bloqueos..."><%= rd[:retrospective]&.went_wrong %></textarea>
+            </div>
+            <div class="cm-retro-field">
+              <label class="cm-retro-label cm-retro-label-improve">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"/></svg>
+                ¿Qué podemos mejorar?
+              </label>
+              <textarea class="cm-retro-textarea" data-field="improvements" data-version-id="<%= rd[:sprint_id] %>" placeholder="Describe las acciones de mejora..."><%= rd[:retrospective]&.improvements %></textarea>
+            </div>
+            <button type="button" class="cm-btn-save cm-retro-save-btn" data-version-id="<%= rd[:sprint_id] %>" disabled>Guardar retrospectiva</button>
+          </div>
+        </div>
+      <% end %>
+    </div>
 
     <% end %>
   </div>
@@ -541,11 +566,10 @@ body[data-color-mode="dark"] #cm-dashboard {
   padding: 8px 16px; border: none; background: none; border-bottom: 2px solid transparent;
   margin-bottom: -2px; cursor: pointer; font-size: 13px; font-weight: 500;
   color: var(--cm-text-secondary); transition: color 0.15s, border-color 0.15s; border-radius: 6px 6px 0 0;
+  text-decoration: none;
 }
-.cm-tab svg { opacity: 0.6; }
 .cm-tab:hover { color: var(--cm-text-primary); background: var(--cm-bg-hover); }
 .cm-tab-active { color: var(--cm-color-primary); border-bottom-color: var(--cm-color-primary); font-weight: 600; }
-.cm-tab-active svg { opacity: 1; }
 
 /* ═══════════════════════════════════════════════════════
    FILTROS
@@ -684,12 +708,7 @@ body[data-color-mode="dark"] #cm-dashboard {
 .cm-chart-wrap-sm { height: 200px; }
 .cm-chart-wrap-sm canvas { max-height: 200px; }
 
-/* KPI Grid (explicación) */
-.cm-kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.cm-kpi-card { background: var(--cm-bg-hover); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 14px; }
-.cm-kpi-name { font-size: 14px; font-weight: 700; color: var(--cm-color-primary); margin-bottom: 6px; }
-.cm-kpi-desc { font-size: 13px; color: var(--cm-text-primary); line-height: 1.5; margin-bottom: 8px; }
-.cm-kpi-bench { font-size: 12px; color: var(--cm-text-secondary); line-height: 1.4; padding-top: 8px; border-top: 1px solid var(--cm-border-light); }
+.cm-kpi-grid { display: none; }
 
 /* Tabla retrospectiva */
 .cm-retro-table { width: 100%; border-collapse: collapse; }
@@ -806,11 +825,42 @@ body[data-color-mode="dark"] #cm-dashboard {
   .cm-retro-table { font-size: 12px; }
 }
 
+/* Chart selector */
+.cm-chart-select { min-width: 160px; font-size: 12px; padding: 4px 8px; }
+
+/* Badges semáforo KPI */
+.cm-retro-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; cursor: help; }
+.cm-retro-badge-green { background: var(--cm-badge-green-bg); color: var(--cm-badge-green-text); }
+.cm-retro-badge-yellow { background: var(--cm-badge-orange-bg); color: var(--cm-badge-orange-text); }
+.cm-retro-badge-red { background: rgba(164,38,44,0.12); color: var(--cm-color-danger); }
+.cm-retro-badge-gray { background: var(--cm-bg-hover); color: var(--cm-text-tertiary); }
+
+/* Retro icons in table */
+.cm-retro-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 700; }
+.cm-retro-icon-good { background: var(--cm-badge-green-bg); color: var(--cm-badge-green-text); }
+.cm-retro-icon-bad { background: rgba(164,38,44,0.12); color: var(--cm-color-danger); }
+.cm-retro-icon-improve { background: var(--cm-badge-blue-bg); color: var(--cm-badge-blue-text); }
+.cm-retro-icon-empty { color: var(--cm-text-tertiary); }
+.cm-retro-detail-btn { padding: 4px 12px; background: none; border: 1px solid var(--cm-border); border-radius: 4px; font-size: 12px; cursor: pointer; color: var(--cm-color-primary); }
+.cm-retro-detail-btn:hover { border-color: var(--cm-color-primary); background: var(--cm-bg-hover); }
+
+/* Modal */
+.cm-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.cm-modal { background: var(--cm-bg-card); border-radius: 8px; width: 100%; max-width: 640px; max-height: 80vh; overflow-y: auto; box-shadow: var(--cm-shadow-panel); }
+.cm-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--cm-border-light); }
+.cm-modal-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.cm-modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--cm-text-secondary); padding: 0 4px; line-height: 1; }
+.cm-modal-close:hover { color: var(--cm-text-primary); }
+.cm-modal-body { padding: 20px; }
+.cm-modal-body .cm-retro-fields { display: flex; flex-direction: column; gap: 12px; }
+
 /* Table wrapper */
 .cm-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .cm-table-wrap table { min-width: 580px; }
 @media (max-width: 600px) {
   .cm-table-wrap { overflow-x: visible; }
   .cm-table-wrap table { min-width: 0; }
+  .cm-modal { max-width: 100%; margin: 0 8px; }
+  .cm-chart-select { width: 100%; }
 }
 </style>

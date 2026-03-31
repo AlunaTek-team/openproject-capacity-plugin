@@ -2,6 +2,8 @@
   'use strict';
 
   var retroChartsInitialized = false;
+  var listenersRegistered = false;
+  var currentChart = null;
 
   // ── Theme helpers ──────────────────────────────────────────────────────────
   function getThemeVars() {
@@ -31,9 +33,7 @@
     var bd;
     try { bd = JSON.parse(raw); } catch (e) { return; }
     if (!bd.labels || bd.labels.length === 0) return;
-
     var t = getThemeVars();
-
     try {
       new Chart(ctx, {
         type: 'line',
@@ -55,128 +55,161 @@
           }
         }
       });
-    } catch (e) { /* Chart.js error */ }
+    } catch (e) { }
   }
 
-  // ── Retrospective charts ──────────────────────────────────────────────────
-  function initRetroChart(canvasId, type, label, unit) {
-    var ctx = document.getElementById(canvasId);
+  // ── Single chart with selector ─────────────────────────────────────────────
+  function renderRetroChart(type) {
+    var ctx = document.getElementById('cm-retro-chart');
     if (!ctx) return;
-    var raw = ctx.getAttribute('data-chart');
-    if (!raw) return;
-    var data;
-    try { data = JSON.parse(raw); } catch (e) { return; }
-    if (!data.labels || data.labels.length === 0) return;
-
+    var labels = JSON.parse(ctx.getAttribute('data-labels') || '[]');
+    if (!labels.length) return;
     var t = getThemeVars();
-    var chartType = type || 'bar';
 
-    try {
-      new Chart(ctx, {
-        type: chartType,
-        data: {
-          labels: data.labels,
-          datasets: [{
-            label: label,
-            data: data.values,
-            borderColor: t.primary,
-            backgroundColor: chartType === 'line' ? 'transparent' : (t.isDark ? 'rgba(83,155,245,0.4)' : 'rgba(0,120,212,0.5)'),
-            fill: chartType === 'line' ? false : true,
-            tension: 0.3,
-            pointRadius: chartType === 'line' ? 4 : 0,
-            pointBackgroundColor: t.primary,
-            borderWidth: chartType === 'line' ? 2 : 0,
-            borderRadius: chartType === 'bar' ? 4 : 0
-          }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + (unit || ''); } } } },
-          scales: {
-            y: { beginAtZero: true, grid: { color: t.gridColor }, ticks: { color: t.tickColor, callback: function (v) { return v + (unit || ''); } } },
-            x: { grid: { display: false }, ticks: { color: t.tickColor, maxRotation: 45 } }
-          }
-        }
-      });
-    } catch (e) { /* Chart.js error */ }
+    if (currentChart) { currentChart.destroy(); currentChart = null; }
+
+    var config;
+    switch (type) {
+      case 'velocity':
+        config = {
+          type: 'bar',
+          data: { labels: labels, datasets: [{ label: 'Velocity (h)', data: JSON.parse(ctx.getAttribute('data-velocity')), backgroundColor: t.isDark ? 'rgba(83,155,245,0.5)' : 'rgba(0,120,212,0.5)', borderColor: t.primary, borderWidth: 1, borderRadius: 4 }] },
+          options: barOptions(t, 'h')
+        };
+        break;
+      case 'throughput':
+        config = {
+          type: 'bar',
+          data: { labels: labels, datasets: [{ label: 'Tareas cerradas', data: JSON.parse(ctx.getAttribute('data-throughput')), backgroundColor: t.isDark ? 'rgba(87,171,90,0.5)' : 'rgba(16,124,16,0.5)', borderColor: t.success, borderWidth: 1, borderRadius: 4 }] },
+          options: barOptions(t, '')
+        };
+        break;
+      case 'predictability':
+        config = {
+          type: 'line',
+          data: { labels: labels, datasets: [
+            { label: 'Predictibilidad', data: JSON.parse(ctx.getAttribute('data-predictability')), borderColor: t.primary, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, pointBackgroundColor: t.primary, borderWidth: 2 },
+            { label: '85% (excelente)', data: labels.map(function () { return 85; }), borderColor: t.success, borderDash: [6, 3], pointRadius: 0, borderWidth: 1, fill: false },
+            { label: '70% (bueno)', data: labels.map(function () { return 70; }), borderColor: t.warning, borderDash: [6, 3], pointRadius: 0, borderWidth: 1, fill: false }
+          ] },
+          options: pctOptions(t)
+        };
+        break;
+      case 'completion':
+        config = {
+          type: 'line',
+          data: { labels: labels, datasets: [
+            { label: 'Completado', data: JSON.parse(ctx.getAttribute('data-completion')), borderColor: t.primary, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, pointBackgroundColor: t.primary, borderWidth: 2 },
+            { label: '90% (excelente)', data: labels.map(function () { return 90; }), borderColor: t.success, borderDash: [6, 3], pointRadius: 0, borderWidth: 1, fill: false },
+            { label: '75% (bueno)', data: labels.map(function () { return 75; }), borderColor: t.warning, borderDash: [6, 3], pointRadius: 0, borderWidth: 1, fill: false }
+          ] },
+          options: pctOptions(t)
+        };
+        break;
+      case 'hours':
+        config = {
+          type: 'bar',
+          data: { labels: labels, datasets: [
+            { label: 'Estimadas', data: JSON.parse(ctx.getAttribute('data-estimated')), backgroundColor: t.isDark ? 'rgba(83,155,245,0.25)' : 'rgba(0,120,212,0.25)', borderColor: t.primary, borderWidth: 1, borderRadius: 4 },
+            { label: 'Completadas', data: JSON.parse(ctx.getAttribute('data-completed')), backgroundColor: t.isDark ? 'rgba(87,171,90,0.5)' : 'rgba(16,124,16,0.5)', borderColor: t.success, borderWidth: 1, borderRadius: 4 }
+          ] },
+          options: barOptions(t, 'h')
+        };
+        break;
+      case 'estimation':
+        config = {
+          type: 'line',
+          data: { labels: labels, datasets: [
+            { label: 'Precisión', data: JSON.parse(ctx.getAttribute('data-estimation')), borderColor: t.primary, backgroundColor: 'transparent', tension: 0.3, pointRadius: 5, pointBackgroundColor: t.primary, borderWidth: 2 },
+            { label: '100% (perfecto)', data: labels.map(function () { return 100; }), borderColor: t.tertiary, borderDash: [6, 3], pointRadius: 0, borderWidth: 1, fill: false }
+          ] },
+          options: pctOptions(t)
+        };
+        break;
+      default:
+        config = { type: 'bar', data: { labels: labels, datasets: [] }, options: barOptions(t, '') };
+    }
+
+    try { currentChart = new Chart(ctx, config); } catch (e) { }
   }
 
-  function initAllRetroCharts() {
-    if (retroChartsInitialized) return;
-    retroChartsInitialized = true;
-    initRetroChart('cm-velocity-chart', 'bar', 'Velocity', 'h');
-    initRetroChart('cm-throughput-chart', 'bar', 'Tareas cerradas', '');
-    initRetroChart('cm-predictability-chart', 'line', 'Predictibilidad', '%');
-    initRetroChart('cm-completion-chart', 'line', 'Completado', '%');
+  function barOptions(t, unit) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: t.tickColor, boxWidth: 12, padding: 12 } }, tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + unit; } } } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: t.gridColor }, ticks: { color: t.tickColor, callback: function (v) { return v + unit; } } },
+        x: { grid: { display: false }, ticks: { color: t.tickColor, maxRotation: 45 } }
+      }
+    };
   }
 
-  // ── Tab switching ─────────────────────────────────────────────────────────
-  function initTabs() {
-    var tabs = document.querySelectorAll('.cm-tab');
-    var tabInput = document.getElementById('cm-tab-input');
-    tabs.forEach(function (tab) {
-      tab.addEventListener('click', function () {
-        var target = tab.getAttribute('data-tab');
-        tabs.forEach(function (t) { t.classList.remove('cm-tab-active'); });
-        tab.classList.add('cm-tab-active');
-        document.querySelectorAll('.cm-tab-content').forEach(function (c) { c.style.display = 'none'; });
-        var content = document.getElementById('cm-tab-' + target);
-        if (content) content.style.display = '';
-        if (tabInput) tabInput.value = target;
-        if (target === 'retrospective') {
-          setTimeout(initAllRetroCharts, 50);
-        }
-      });
+  function pctOptions(t) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: t.tickColor, boxWidth: 12, padding: 12 } }, tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } } },
+      scales: {
+        y: { beginAtZero: true, max: 120, grid: { color: t.gridColor }, ticks: { color: t.tickColor, callback: function (v) { return v + '%'; } } },
+        x: { grid: { display: false }, ticks: { color: t.tickColor, maxRotation: 45 } }
+      }
+    };
+  }
+
+  // ── Modal ──────────────────────────────────────────────────────────────────
+  function openRetroModal(versionId, sprintName) {
+    var template = document.getElementById('cm-retro-template-' + versionId);
+    var modal = document.getElementById('cm-retro-modal');
+    var body = document.getElementById('cm-modal-body');
+    var title = document.getElementById('cm-modal-title');
+    if (!template || !modal || !body) return;
+
+    body.innerHTML = template.innerHTML;
+    title.textContent = 'Retrospectiva: ' + sprintName;
+    modal.style.display = 'flex';
+
+    initRetroSaveInModal(body);
+  }
+
+  function closeRetroModal() {
+    var modal = document.getElementById('cm-retro-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function initRetroSaveInModal(container) {
+    var saveBtn = container.querySelector('.cm-retro-save-btn');
+    var textareas = container.querySelectorAll('.cm-retro-textarea');
+    if (!saveBtn) return;
+
+    var retroPath = document.getElementById('cm-dashboard');
+    retroPath = retroPath ? retroPath.getAttribute('data-retro-path') : null;
+
+    textareas.forEach(function (ta) {
+      ta.addEventListener('input', function () { saveBtn.disabled = false; });
     });
 
-    // Si la pestaña retrospectiva ya está activa al cargar
-    var activeTab = document.querySelector('.cm-tab-active');
-    if (activeTab && activeTab.getAttribute('data-tab') === 'retrospective') {
-      setTimeout(initAllRetroCharts, 100);
-    }
-  }
-
-  // ── Retrospective save ────────────────────────────────────────────────────
-  function initRetroSave() {
-    var dash = document.getElementById('cm-dashboard');
-    var retroPath = dash ? dash.getAttribute('data-retro-path') : null;
-    if (!retroPath) return;
-
-    document.querySelectorAll('.cm-retro-sprint').forEach(function (section) {
-      var saveBtn = section.querySelector('.cm-retro-save-btn');
-      var textareas = section.querySelectorAll('.cm-retro-textarea');
-      if (!saveBtn) return;
-
+    saveBtn.addEventListener('click', function () {
+      var versionId = saveBtn.getAttribute('data-version-id');
+      var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+      var payload = { version_id: parseInt(versionId) };
       textareas.forEach(function (ta) {
-        ta.addEventListener('input', function () { saveBtn.disabled = false; });
+        payload[ta.getAttribute('data-field')] = ta.value;
       });
-
-      saveBtn.addEventListener('click', function () {
-        var versionId = section.getAttribute('data-version-id');
-        var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
-
-        var payload = { version_id: parseInt(versionId) };
-        textareas.forEach(function (ta) {
-          payload[ta.getAttribute('data-field')] = ta.value;
-        });
-
-        fetch(retroPath, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify(payload)
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.success) {
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Guardado';
-            setTimeout(function () { saveBtn.textContent = 'Guardar retrospectiva'; }, 2000);
-          } else {
-            alert('Error: ' + (data.error || 'Error desconocido'));
-          }
-        })
-        .catch(function (err) { alert('Error de conexion: ' + err.message); });
-      });
+      fetch(retroPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(payload)
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Guardado';
+          setTimeout(function () { saveBtn.textContent = 'Guardar retrospectiva'; }, 2000);
+        } else {
+          alert('Error: ' + (data.error || 'Error desconocido'));
+        }
+      })
+      .catch(function (err) { alert('Error de conexion: ' + err.message); });
     });
   }
 
@@ -251,41 +284,17 @@
     document.getElementById('cm-filters-form').submit();
   }
 
-  // ── Main init ─────────────────────────────────────────────────────────────
-  var cmReady = false;
-
-  function cmInit() {
-    var dashboard = document.getElementById('cm-dashboard');
-    if (!dashboard) return;
-
-    // Clean up previous listeners by cloning nodes (prevents double-binding on turbo nav)
-    if (cmReady) {
-      document.querySelectorAll('.cm-tab').forEach(function (el) {
-        var clone = el.cloneNode(true);
-        el.parentNode.replaceChild(clone, el);
-      });
-    }
-    cmReady = true;
-
-    try { initBurndownChart(); } catch (e) { /* burndown error */ }
-    initTabs();
-    initRetroSave();
-
-    // Dropdown proyectos
-    var trigger = document.getElementById('cm-multiselect-trigger');
-    if (trigger) {
-      trigger.addEventListener('click', function (e) {
-        e.stopPropagation();
-        var panel = document.getElementById('cm-multiselect-panel');
-        if (panel && panel.style.display !== 'none') cmClosePanel(); else cmOpenPanel();
-      });
-    }
+  // ── Global listeners (registered once) ─────────────────────────────────────
+  function registerGlobalListeners() {
+    if (listenersRegistered) return;
+    listenersRegistered = true;
 
     document.addEventListener('click', function (e) {
       var panel = document.getElementById('cm-multiselect-panel');
       var btn = document.getElementById('cm-multiselect-trigger');
       if (!panel || panel.style.display === 'none') return;
-      if (!panel.contains(e.target) && btn && !btn.contains(e.target)) cmClosePanel();
+      if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+      cmClosePanel();
     });
 
     window.addEventListener('scroll', function () {
@@ -298,6 +307,58 @@
     }, true);
 
     window.addEventListener('resize', cmClosePanel);
+
+    // Modal close
+    document.addEventListener('click', function (e) {
+      if (e.target.id === 'cm-retro-modal' || e.target.id === 'cm-modal-close') {
+        closeRetroModal();
+      }
+      if (e.target.closest && e.target.closest('#cm-modal-close')) {
+        closeRetroModal();
+      }
+    });
+
+    // Escape to close modal
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeRetroModal();
+    });
+  }
+
+  // ── Per-page init ──────────────────────────────────────────────────────────
+  function cmInit() {
+    var dashboard = document.getElementById('cm-dashboard');
+    if (!dashboard) return;
+
+    registerGlobalListeners();
+
+    try { initBurndownChart(); } catch (e) { }
+
+    // Chart selector
+    var chartSel = document.getElementById('cm-chart-selector');
+    if (chartSel) {
+      renderRetroChart(chartSel.value);
+      chartSel.addEventListener('change', function () { renderRetroChart(this.value); });
+    }
+
+    // Retro detail buttons
+    document.querySelectorAll('.cm-retro-detail-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var vid = btn.getAttribute('data-version-id');
+        var sname = btn.getAttribute('data-sprint-name');
+        openRetroModal(vid, sname);
+      });
+    });
+
+    // Dropdown trigger
+    var trigger = document.getElementById('cm-multiselect-trigger');
+    if (trigger) {
+      trigger.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var panel = document.getElementById('cm-multiselect-panel');
+        if (panel && panel.style.display !== 'none') cmClosePanel(); else cmOpenPanel();
+      });
+    }
 
     var tabAll = document.getElementById('cm-tab-all');
     var tabSel = document.getElementById('cm-tab-selected');
@@ -313,9 +374,6 @@
         if (e.target.name === 'project_ids[]') {
           cmUpdateSubprojectsCheckbox();
           cmUpdateButtonLabel();
-          var search2 = document.getElementById('cm-ms-search');
-          var isAll = document.getElementById('cm-tab-all').classList.contains('cm-ms-tab-active');
-          cmFilterProjects(search2 ? search2.value : '', isAll ? 'all' : 'selected');
         }
       });
     }
@@ -341,7 +399,6 @@
     var applyBtn = document.getElementById('cm-ms-apply-btn');
     if (applyBtn) applyBtn.addEventListener('click', cmApplyFilter);
 
-    // Selector sprint
     var sprintSelect = document.getElementById('cm-sprint-select');
     if (sprintSelect) {
       sprintSelect.addEventListener('change', function () {
@@ -360,46 +417,28 @@
       });
     }
 
-    // Capacidad save
-    var capacityChanged = false;
-    function markChanged() {
-      capacityChanged = true;
-      var btn = document.getElementById('cm-save-capacity-btn');
-      if (btn) btn.disabled = false;
-    }
-
-    function updatePreview(input) {
-      markChanged();
-      var row = input.closest('tr');
-      if (!row) return;
-      var hoursInput = row.querySelector('.cm-input-hours');
-      var daysInput = row.querySelector('.cm-input-days');
-      var userId = hoursInput ? hoursInput.dataset.userId : null;
-      var preview = userId ? document.querySelector('.cm-capacity-preview[data-user-id="' + userId + '"]') : null;
-      if (!hoursInput || !daysInput || !preview) return;
-      var h = parseFloat(hoursInput.value) || 0;
-      var d = parseInt(daysInput.value) || 0;
-      preview.textContent = (Math.round(h * d * 10) / 10) + 'h';
-    }
-
+    // Capacity
     var capTable = document.querySelector('.cm-capacity-table');
     if (capTable) {
       capTable.addEventListener('change', function (e) {
-        if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) updatePreview(e.target);
+        if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) {
+          updatePreview(e.target);
+        }
       });
       capTable.addEventListener('input', function (e) {
-        if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) updatePreview(e.target);
+        if (e.target.classList.contains('cm-input-hours') || e.target.classList.contains('cm-input-days')) {
+          updatePreview(e.target);
+        }
       });
     }
 
     var saveBtn = document.getElementById('cm-save-capacity-btn');
     if (saveBtn) {
       saveBtn.addEventListener('click', function () {
-        var dashboard = document.getElementById('cm-dashboard');
-        var sprintId = dashboard ? dashboard.getAttribute('data-sprint-id') : null;
-        var savePath = dashboard ? dashboard.getAttribute('data-save-path') : null;
+        var dash = document.getElementById('cm-dashboard');
+        var sprintId = dash ? dash.getAttribute('data-sprint-id') : null;
+        var savePath = dash ? dash.getAttribute('data-save-path') : null;
         if (!sprintId || !savePath) return;
-
         var rows = document.querySelectorAll('.cm-capacity-table tbody tr');
         var configs = [];
         rows.forEach(function (row) {
@@ -408,7 +447,6 @@
           if (!hi) return;
           configs.push({ user_id: parseInt(hi.dataset.userId), hours_per_day: parseFloat(hi.value) || 8.0, available_days: di ? (parseInt(di.value) || null) : null });
         });
-
         var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
         fetch(savePath, {
           method: 'POST',
@@ -417,7 +455,7 @@
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (data.success) { capacityChanged = false; saveBtn.disabled = true; location.reload(); }
+          if (data.success) { saveBtn.disabled = true; location.reload(); }
           else alert('Error al guardar: ' + (data.error || 'Error desconocido'));
         })
         .catch(function (err) { alert('Error de conexion: ' + err.message); });
@@ -425,6 +463,22 @@
     }
   }
 
+  function updatePreview(input) {
+    var row = input.closest('tr');
+    if (!row) return;
+    var hoursInput = row.querySelector('.cm-input-hours');
+    var daysInput = row.querySelector('.cm-input-days');
+    var userId = hoursInput ? hoursInput.dataset.userId : null;
+    var preview = userId ? document.querySelector('.cm-capacity-preview[data-user-id="' + userId + '"]') : null;
+    if (!hoursInput || !daysInput || !preview) return;
+    var h = parseFloat(hoursInput.value) || 0;
+    var d = parseInt(daysInput.value) || 0;
+    preview.textContent = (Math.round(h * d * 10) / 10) + 'h';
+    var btn = document.getElementById('cm-save-capacity-btn');
+    if (btn) btn.disabled = false;
+  }
+
+  // ── Entry points ───────────────────────────────────────────────────────────
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cmInit);
   else cmInit();
   document.addEventListener('turbo:load', cmInit);
