@@ -1,0 +1,33 @@
+en:
+  mail:
+    work_package_updated:
+      subject: "%{user_name} updated #%{id} %{subject} (%{reason})"
+      notification_summary: "%{user} updated this work package (%{reason})"
+      reasons:
+        assigned: "assigned"
+        responsible: "accountable"
+        watched: "watched"
+        commented: "commented"
+        mentioned: "mentioned"
+        scheduled: "scheduled"
+        prioritized: "prioritized"
+        processed: "processed"
+        created: "created"
+        shared: "shared"
+
+es:
+  mail:
+    work_package_updated:
+      subject: "%{user_name} actualizó #%{id} %{subject} (%{reason})"
+      notification_summary: "%{user} actualizó este paquete de trabajo (%{reason})"
+      reasons:
+        assigned: "asignación"
+        responsible: "responsable"
+        watched: "vigilado"
+        commented: "comentario"
+        mentioned: "mención"
+        scheduled: "programación"
+        prioritized: "prioridad"
+        processed: "procesado"
+        created: "creación"
+        shared: "compartido"

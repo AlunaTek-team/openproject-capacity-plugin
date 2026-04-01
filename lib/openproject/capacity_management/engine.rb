@@ -13,29 +13,68 @@ module OpenProject
       end
 
       initializer 'capacity_management.immediate_email_notifications' do
-        # Override the build_local_times method in HavingReminderMailToSend to remove
-        # the minute filter that only allows exact hours (:00). This enables email
-        # notifications every 15 minutes instead of once per hour.
-        if defined?(Users::Scopes::HavingReminderMailToSend)
-          Users::Scopes::HavingReminderMailToSend.module_eval do
+        Rails.application.config.to_prepare do
+          # Add generic notification method to WorkPackageMailer
+          ::WorkPackageMailer.class_eval do
+            def work_package_updated(recipient, journal, reason)
+              @user = recipient
+              @work_package = journal.journable
+              @journal = journal
+              @reason = reason
+
+              author = journal.user
+
+              User.execute_as author do
+                set_work_package_headers(@work_package)
+                message_id journal, recipient
+                references journal
+
+                send_localized_mail(recipient) do
+                  I18n.t(:"mail.work_package_updated.subject",
+                         user_name: author.name,
+                         id: @work_package.id,
+                         subject: @work_package.subject,
+                         reason: reason_label(reason))
+                end
+              end
+            end
+
             private
 
-            def build_local_times(times, zone)
-              times.map do |time|
-                local_time = time.in_time_zone(zone)
-                workday = local_time.to_date.cwday
-                local_date = local_time.to_date
+            def reason_label(reason)
+              I18n.t(:"mail.work_package_updated.reasons.#{reason}",
+                     default: reason.to_s.humanize)
+            end
+          end
 
-                [
-                  local_date,
-                  local_time.strftime("%H:%M:%S+00:00"),
-                  zone.tzinfo.canonical_zone.name,
-                  workday
-                ]
+          # Override supports_mail? and supports_mail_digest? to enable email alerts
+          # for ALL notification reasons (not just :mentioned). Without this,
+          # mail_alert_sent is set to nil instead of false, and the mail_alert_unsent
+          # scope won't find the notification.
+          ::Notifications::CreateFromModelService::WorkPackageStrategy.class_eval do
+            class << self
+              def supports_mail?(_reason)
+                true
+              end
+
+              def supports_mail_digest?(_reason)
+                true
               end
             end
           end
-          Rails.logger.info "CapacityManagement: Immediate email notifications enabled (every 15 min)"
+
+          # Override WorkPackageStrategy to send emails for all reasons using prepend
+          ::Notifications::MailService::WorkPackageStrategy.class_eval do
+            module_function
+
+            def send_mail(notification)
+              WorkPackageMailer
+                .work_package_updated(notification.recipient, notification.journal, notification.reason)
+                .deliver_later
+            end
+          end
+
+          Rails.logger.info "CapacityManagement: Immediate email notifications enabled for all work package events"
         end
       end
 

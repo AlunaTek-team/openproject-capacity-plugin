@@ -1,0 +1,9 @@
+<%= @journal.user %> <%= @reason.to_s.humanize.downcase %> #<%= @work_package.id %>
+
+<%= @work_package.project.name %> - <%= @work_package.status.name %> <%= @work_package.type.name %> #<%= @work_package.id %>: <%= @work_package.subject %>
+
+<% if @journal.notes.present? %>
+<%= @journal.notes %>
+<% end %>
+
+<%= details_notifications_url(@work_package.id, tab: :activity) %>
