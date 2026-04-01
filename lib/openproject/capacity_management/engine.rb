@@ -12,6 +12,33 @@ module OpenProject
         ]
       end
 
+      initializer 'capacity_management.immediate_email_notifications' do
+        # Override the build_local_times method in HavingReminderMailToSend to remove
+        # the minute filter that only allows exact hours (:00). This enables email
+        # notifications every 15 minutes instead of once per hour.
+        if defined?(Users::Scopes::HavingReminderMailToSend)
+          Users::Scopes::HavingReminderMailToSend.module_eval do
+            private
+
+            def build_local_times(times, zone)
+              times.map do |time|
+                local_time = time.in_time_zone(zone)
+                workday = local_time.to_date.cwday
+                local_date = local_time.to_date
+
+                [
+                  local_date,
+                  local_time.strftime("%H:%M:%S+00:00"),
+                  zone.tzinfo.canonical_zone.name,
+                  workday
+                ]
+              end
+            end
+          end
+          Rails.logger.info "CapacityManagement: Immediate email notifications enabled (every 15 min)"
+        end
+      end
+
       initializer 'capacity_management.setup_custom_fields' do
         if defined?(ActiveRecord) && ActiveRecord::Base.connection.table_exists?('custom_fields')
           begin
