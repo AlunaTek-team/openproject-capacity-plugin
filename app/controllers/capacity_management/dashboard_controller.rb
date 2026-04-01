@@ -160,6 +160,7 @@ module CapacityManagement
       return [] unless sprint
 
       project_ids = filtered_projects.map(&:id)
+      project_filter_values = project_ids.map(&:to_s)
 
       WorkPackage.includes(:status, :assigned_to)
                  .where(version_id: sprint.id)
@@ -233,6 +234,7 @@ module CapacityManagement
       wps         = filtered_work_packages
       users       = filtered_member_users
       project_ids = filtered_projects.map(&:id)
+      project_filter_values = project_ids.map(&:to_s)
 
       today             = Date.today
       sprint_total_days = work_days_between(@sprint.start_date, @sprint.effective_date)
@@ -270,14 +272,14 @@ module CapacityManagement
 
         percent = capacity > 0 ? (assigned / capacity * 100).round(1) : (assigned > 0 ? 100.0 : 0.0)
 
-        wp_filters = CGI.escape(
-          { f: [
-              { n: 'assignee_or_group', o: '=', v: [user.id.to_s] },
-              { n: 'version',  o: '=', v: [@sprint.id.to_s] }
-            ]
-          }.to_json
-        )
-        wp_url = "/projects/#{@project.identifier}/work_packages?query_props=#{wp_filters}"
+        wp_query_props = {
+          f: [
+            { n: 'project', o: '=', v: project_filter_values },
+            { n: 'assignee_or_group', o: '=', v: [user.id.to_s] },
+            { n: 'version', o: '=', v: [@sprint.id.to_s] }
+          ]
+        }.to_json
+        wp_url = work_packages_path(query_props: wp_query_props)
 
         {
           user:             user,
