@@ -232,7 +232,8 @@
 
   function cmFilterProjects(query, tabOverride) {
     var q = (query || '').toLowerCase().trim();
-    var isAll = tabOverride ? tabOverride === 'all' : document.getElementById('cm-tab-all').classList.contains('cm-ms-tab-active');
+    var allTab = document.getElementById('cm-tab-all');
+    var isAll = tabOverride ? tabOverride === 'all' : !!(allTab && allTab.classList.contains('cm-ms-tab-active'));
     document.querySelectorAll('#cm-ms-list .cm-multiselect-item-row').forEach(function (row) {
       var matchQ = !q || (row.dataset.name || '').includes(q);
       var cb = row.querySelector('input[type="checkbox"]');
@@ -241,16 +242,26 @@
     });
   }
 
+  function cmGetProjectCheckboxes() {
+    return Array.from(document.querySelectorAll('#cm-ms-list input[name="project_ids[]"]'));
+  }
+
+  function cmGetChildCheckboxes() {
+    return cmGetProjectCheckboxes().filter(function (cb) { return cb.dataset.isChild === 'true'; });
+  }
+
   function cmUpdateSubprojectsCheckbox() {
-    var children = document.querySelectorAll('#cm-ms-list input[data-is-child="true"]');
+    var children = cmGetChildCheckboxes();
     var includeBox = document.getElementById('cm-include-sub');
     if (!children.length || !includeBox) return;
-    includeBox.checked = Array.from(children).every(function (cb) { return cb.checked; });
+    var checkedCount = children.filter(function (cb) { return cb.checked; }).length;
+    includeBox.checked = checkedCount === children.length;
+    includeBox.indeterminate = checkedCount > 0 && checkedCount < children.length;
   }
 
   function cmUpdateButtonLabel() {
-    var items = document.querySelectorAll('#cm-ms-list input[name="project_ids[]"]');
-    var checked = Array.from(items).filter(function (cb) { return cb.checked; });
+    var items = cmGetProjectCheckboxes();
+    var checked = items.filter(function (cb) { return cb.checked; });
     var label = document.getElementById('cm-multiselect-label');
     if (!label) return;
     if (checked.length === 0) label.textContent = 'Ning\u00fan proyecto';
@@ -259,6 +270,20 @@
       var ns = checked[0].closest('.cm-multiselect-item-row').querySelector('.cm-multiselect-item-name');
       label.textContent = ns ? ns.textContent.trim() : '1 proyecto';
     } else label.textContent = checked.length + ' proyectos seleccionados';
+  }
+
+  function cmSyncProjectSelection() {
+    cmUpdateSubprojectsCheckbox();
+    cmUpdateButtonLabel();
+    var search = document.getElementById('cm-ms-search');
+    cmFilterProjects(search ? search.value : '');
+  }
+
+  function cmSetChildrenSelection(checked) {
+    cmGetChildCheckboxes().forEach(function (cb) {
+      cb.checked = checked;
+    });
+    cmSyncProjectSelection();
   }
 
   function cmApplyFilter() {
@@ -322,27 +347,27 @@
     var msList = document.getElementById('cm-ms-list');
     bindOnce(msList, 'project-list-change', 'change', function (e) {
       if (e.target.name === 'project_ids[]') {
-        cmUpdateSubprojectsCheckbox();
-        cmUpdateButtonLabel();
+        cmSyncProjectSelection();
       }
     });
 
     var includeSub = document.getElementById('cm-include-sub');
     bindOnce(includeSub, 'include-sub-change', 'change', function () {
-      document.querySelectorAll('#cm-ms-list input[data-is-child="true"]').forEach(function (cb) { cb.checked = includeSub.checked; });
-      cmUpdateButtonLabel();
+      cmSetChildrenSelection(includeSub.checked);
     });
 
     var clearBtn = document.getElementById('cm-ms-clear-btn');
     bindOnce(clearBtn, 'clear-projects-click', 'click', function () {
-      document.querySelectorAll('#cm-ms-list input[name="project_ids[]"]').forEach(function (cb) { cb.checked = false; });
-      if (includeSub) includeSub.checked = false;
-      cmUpdateButtonLabel();
+      cmGetProjectCheckboxes().forEach(function (cb) { cb.checked = false; });
+      if (includeSub) {
+        includeSub.checked = false;
+        includeSub.indeterminate = false;
+      }
+      cmSyncProjectSelection();
       cmSwitchTab('all');
     });
 
-    cmUpdateButtonLabel();
-    cmUpdateSubprojectsCheckbox();
+    cmSyncProjectSelection();
     cmSwitchTab('all');
 
     var sprintSelect = document.getElementById('cm-sprint-select');

@@ -10,15 +10,15 @@ Proporciona un dashboard completo de gestión de capacidad por sprint: carga de 
 
 ### Dashboard de capacidad y carga
 - Resumen del sprint: días hábiles totales y restantes, tareas totales/completadas/pendientes, proyectos incluidos.
-- Tarjetas de resumen del equipo: capacidad total, horas estimadas, horas invertidas y horas pendientes.
+- Tarjetas de resumen del equipo: capacidad total, horas estimadas, horas completadas y horas pendientes.
 
 ### Trabajo por miembro
 - **Barra de progreso multicapa** por cada miembro:
-  - Azul → horas invertidas (tiempo registrado en TimeEntry)
-  - Verde semitransparente → horas pendientes (tareas abiertas con estimación)
+  - Azul → horas completadas del alcance del sprint
+  - Verde semitransparente → horas asignadas del sprint
   - Gris → capacidad libre restante
   - Marcador vertical naranja → avance esperado a la fecha según días disponibles del miembro
-- **Indicador de velocidad**: compara horas invertidas vs. avance esperado hoy.
+- **Indicador de velocidad**: compara horas completadas vs. avance esperado hoy.
   - 🔴 Lento — < 80 % del esperado
   - 🟢 Normal — 80–110 %
   - 🔵 Adelantado — > 110 %

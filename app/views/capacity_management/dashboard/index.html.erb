@@ -139,10 +139,21 @@
         </div>
       </div>
       <div class="cm-sprint-info-details">
+        <%
+          remaining_days = @sprint_info[:work_days_remaining].to_i
+          remaining_days_class =
+            if remaining_days <= 2
+              'cm-detail-value-danger'
+            elsif remaining_days <= 5
+              'cm-detail-value-warning'
+            else
+              'cm-detail-value-safe'
+            end
+        %>
         <div class="cm-sprint-detail"><span class="cm-detail-label">Fecha inicio</span><span class="cm-detail-value"><%= @sprint_info[:start_date] %></span></div>
         <div class="cm-sprint-detail"><span class="cm-detail-label">Fecha fin</span><span class="cm-detail-value"><%= @sprint_info[:end_date] %></span></div>
         <div class="cm-sprint-detail"><span class="cm-detail-label">Días hábiles</span><span class="cm-detail-value"><%= @sprint_info[:total_work_days] %></span></div>
-        <div class="cm-sprint-detail"><span class="cm-detail-label">Restantes</span><span class="cm-detail-value"><%= @sprint_info[:work_days_remaining] %></span></div>
+        <div class="cm-sprint-detail"><span class="cm-detail-label">Restantes</span><span class="cm-detail-value <%= remaining_days_class %>"><%= @sprint_info[:work_days_remaining] %></span></div>
         <% if @sprint_info[:projects_count] && @sprint_info[:projects_count] > 1 %>
         <div class="cm-sprint-detail cm-sprint-detail-wide"><span class="cm-detail-label">Proyectos incluidos</span><span class="cm-detail-value"><%= @sprint_info[:projects_names].join(', ') %></span></div>
         <% end %>
@@ -154,7 +165,7 @@
       <div class="cm-card"><div class="cm-card-label">Capacidad total</div><div class="cm-card-value"><%= @team_summary[:total_capacity] %>h</div><div class="cm-card-sub"><%= @sprint_info[:total_work_days] %> días hábiles</div></div>
       <% over_capacity = @team_summary[:total_capacity] > 0 && @team_summary[:total_estimated] > @team_summary[:total_capacity] %>
       <div class="cm-card"><div class="cm-card-label">Trabajo asignado</div><div class="cm-card-value <%= 'cm-value-over' if over_capacity %>"><%= @team_summary[:total_estimated] %>h</div><% assigned_pct = @team_summary[:total_capacity] > 0 ? (@team_summary[:total_estimated] / @team_summary[:total_capacity] * 100).round(1) : 0 %><div class="cm-card-sub"><%= assigned_pct %>% de la capacidad</div></div>
-      <div class="cm-card"><div class="cm-card-label">Invertido</div><div class="cm-card-value cm-value-done"><%= @team_summary[:completed_hours] %>h</div><div class="cm-card-sub"><%= @team_summary[:percent_complete] %>% del asignado</div></div>
+      <div class="cm-card"><div class="cm-card-label">Completado</div><div class="cm-card-value cm-value-done"><%= @team_summary[:completed_hours] %>h</div><div class="cm-card-sub"><%= @team_summary[:percent_complete] %>% del asignado</div></div>
       <div class="cm-card"><div class="cm-card-label">Pendiente</div><div class="cm-card-value"><%= @team_summary[:remaining_hours] %>h</div><div class="cm-card-sub">en tareas abiertas</div></div>
     </div>
 
@@ -219,7 +230,7 @@
       <div class="cm-section-header">
         <h3>Trabajo por miembro</h3>
         <div class="cm-prog-legend-global">
-          <span class="cm-legend-swatch cm-swatch-logged"></span><span>Invertido</span>
+          <span class="cm-legend-swatch cm-swatch-logged"></span><span>Completado</span>
           <span class="cm-legend-swatch cm-swatch-pending"></span><span>Pendiente</span>
           <span class="cm-legend-marker-pip"></span><span>Esperado hoy</span>
         </div>
@@ -229,7 +240,7 @@
       <% else %>
       <div class="cm-table-wrap">
       <table class="cm-member-table">
-        <thead><tr><th>Miembro</th><th>Progreso en el Sprint</th><th class="cm-th-r">Asignado</th><th class="cm-th-r">Invertido</th><th class="cm-th-r">Pendiente</th></tr></thead>
+        <thead><tr><th>Miembro</th><th>Progreso en el Sprint</th><th class="cm-th-r">Asignado</th><th class="cm-th-r">Completado</th><th class="cm-th-r">Pendiente</th></tr></thead>
         <tbody>
           <% @member_rows.each do |m| %>
             <%
@@ -253,7 +264,7 @@
               else
                 badge_cls = 'cm-speed-nodata'; badge_icon = '&#8212;'; badge_label = 'Sin datos'
               end
-              bar_tip = "Invertido: #{m[:logged]}h · Pendiente: #{m[:remaining_open]}h · Asignado: #{m[:assigned]}h · Capacidad: #{m[:capacity]}h · Esperado hoy: #{m[:expected_today]}h"
+              bar_tip = "Completado: #{m[:logged]}h · Pendiente: #{m[:remaining_open]}h · Asignado: #{m[:assigned]}h · Capacidad: #{m[:capacity]}h · Esperado hoy: #{m[:expected_today]}h"
             %>
             <tr<%= m[:overloaded] ? ' class="cm-row-over"' : '' %>>
               <td><div class="cm-td-user"><%= avatar(m[:user], size: "default") %><a href="<%= m[:wp_url] %>" class="cm-member-link"><%= m[:user_name] %></a></div></td>
@@ -265,7 +276,7 @@
                       <% if logged_pct > 0 %><div class="cm-prog-logged" style="width:<%= logged_pct %>%"></div><% end %>
                       <% if expected_pct > 0 %><div class="cm-prog-marker" style="left:<%= expected_pct %>%" title="Esperado hoy: <%= m[:expected_today] %>h"></div><% end %>
                     </div>
-                    <div class="cm-prog-meta"><%= m[:logged] %>h inv. &nbsp;·&nbsp; <%= m[:assigned] %>h asig. &nbsp;·&nbsp; cap: <%= m[:capacity] %>h</div>
+                    <div class="cm-prog-meta"><%= m[:logged] %>h comp. &nbsp;·&nbsp; <%= m[:assigned] %>h asig. &nbsp;·&nbsp; cap: <%= m[:capacity] %>h</div>
                   </div>
                   <span class="cm-speed-badge <%= badge_cls %>"><%= badge_icon.html_safe %>&nbsp;<%= badge_label %></span>
                 </div>
@@ -282,7 +293,7 @@
           <% else %><% t_assigned_pct = 0; t_logged_pct = 0 %><% end %>
           <tr class="cm-row-total">
             <td><strong>Total equipo</strong></td>
-            <td class="cm-td-bar"><div class="cm-progress-wrap"><div class="cm-progress-inner"><div class="cm-progress-track"><% if t_assigned_pct > 0 %><div class="cm-prog-assigned" style="width:<%= t_assigned_pct %>%"></div><% end %><% if t_logged_pct > 0 %><div class="cm-prog-logged" style="width:<%= t_logged_pct %>%"></div><% end %></div><div class="cm-prog-meta"><%= t[:completed_hours] %>h inv. &nbsp;·&nbsp; <%= t[:total_estimated] %>h asig. &nbsp;·&nbsp; cap: <%= t[:total_capacity] %>h</div></div></div></td>
+            <td class="cm-td-bar"><div class="cm-progress-wrap"><div class="cm-progress-inner"><div class="cm-progress-track"><% if t_assigned_pct > 0 %><div class="cm-prog-assigned" style="width:<%= t_assigned_pct %>%"></div><% end %><% if t_logged_pct > 0 %><div class="cm-prog-logged" style="width:<%= t_logged_pct %>%"></div><% end %></div><div class="cm-prog-meta"><%= t[:completed_hours] %>h comp. &nbsp;·&nbsp; <%= t[:total_estimated] %>h asig. &nbsp;·&nbsp; cap: <%= t[:total_capacity] %>h</div></div></div></td>
             <td class="cm-td-r"><strong><%= t[:total_estimated] %>h</strong></td>
             <td class="cm-td-r cm-td-done"><strong><%= t[:completed_hours] %>h</strong></td>
             <td class="cm-td-r"><strong><%= t[:remaining_hours] %>h</strong></td>
@@ -640,6 +651,9 @@ body[data-color-mode="dark"] #cm-dashboard {
 .cm-sprint-detail-wide { min-width: 240px; flex: 1; }
 .cm-detail-label { font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .cm-detail-value { font-size: 14px; font-weight: 600; color: var(--cm-text-primary); }
+.cm-detail-value-safe { color: var(--cm-color-success); }
+.cm-detail-value-warning { color: var(--cm-color-warning); }
+.cm-detail-value-danger { color: var(--cm-color-danger); }
 .cm-summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
 .cm-card { background: var(--cm-bg-card); border: 1px solid var(--cm-border-light); border-radius: 6px; padding: 16px 20px; box-shadow: var(--cm-shadow); }
 .cm-card-label { font-size: 11px; font-weight: 600; color: var(--cm-text-secondary); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }

@@ -210,19 +210,19 @@ module CapacityManagement
     def build_team_summary
       return { total_capacity: 0.0, total_estimated: 0.0, completed_hours: 0.0, remaining_hours: 0.0, percent_complete: 0.0 } unless @sprint
 
-      wps      = filtered_work_packages
-      total    = wps.sum { |wp| wp.estimated_hours.to_f }
-      logged   = team_logged_hours
-      open_rem = wps.reject { |wp| wp.status&.is_closed? }.sum { |wp| wp.estimated_hours.to_f }
-      users    = filtered_member_users
-      capacity = users.sum { |u| WorkloadService.sprint_capacity(u, @sprint) }
-      pct      = total > 0 ? (logged / total * 100).round(1) : 0.0
+      wps             = filtered_work_packages
+      total           = wps.sum { |wp| wp.estimated_hours.to_f }
+      completed_scope = completed_hours_for(wps)
+      remaining_scope = remaining_hours_for(wps)
+      users           = filtered_member_users
+      capacity        = users.sum { |u| WorkloadService.sprint_capacity(u, @sprint) }
+      pct             = total > 0 ? (completed_scope / total * 100).round(1) : 0.0
 
       {
         total_capacity:   capacity.round(1),
         total_estimated:  total.round(1),
-        completed_hours:  logged.round(1),
-        remaining_hours:  open_rem.round(1),
+        completed_hours:  completed_scope.round(1),
+        remaining_hours:  remaining_scope.round(1),
         percent_complete: pct
       }
     end
@@ -244,15 +244,8 @@ module CapacityManagement
         user_wps       = wps.select { |wp| wp.assigned_to_id == user.id }
         capacity       = WorkloadService.sprint_capacity(user, @sprint)
         assigned       = user_wps.sum { |wp| wp.estimated_hours.to_f }.round(1)
-
-        # Horas invertidas: time entries en WPs asignados al usuario (por cualquiera)
-        # + time entries del usuario en WPs no asignados a él
-        assigned_wp_ids = user_wps.map(&:id)
-        logged_assigned = assigned_wp_ids.any? ? TimeEntry.where(entity_type: 'WorkPackage', entity_id: assigned_wp_ids).sum(:hours).to_f : 0.0
-        logged_personal = WorkloadService.logged_hours(user, @sprint, project_ids)
-        logged = (logged_assigned + logged_personal).round(1)
-        remaining_open = user_wps.reject { |wp| wp.status&.is_closed? }
-                                 .sum { |wp| wp.estimated_hours.to_f }.round(1)
+        completed      = completed_hours_for(user_wps).round(1)
+        remaining_open = remaining_hours_for(user_wps).round(1)
 
         config_days    = ::CapacityManagement::SprintCapacityConfiguration
                            .available_days_for(@sprint.id, user.id)
@@ -265,10 +258,10 @@ module CapacityManagement
         elsif expected_today <= 0
           :no_data
         else
-          ratio = (logged / expected_today * 100).round(0)
+          ratio = (completed / expected_today * 100).round(0)
           if ratio < 80 then :slow elsif ratio <= 110 then :normal else :fast end
         end
-        speed_ratio = expected_today > 0 ? (logged / expected_today * 100).round(0) : nil
+        speed_ratio = expected_today > 0 ? (completed / expected_today * 100).round(0) : nil
 
         percent = capacity > 0 ? (assigned / capacity * 100).round(1) : (assigned > 0 ? 100.0 : 0.0)
 
@@ -288,7 +281,7 @@ module CapacityManagement
           initials:       user.name.split.map { |w| w[0].upcase }.first(2).join,
           capacity:       capacity.round(1),
           assigned:       assigned,
-          logged:         logged,
+          logged:         completed,
           remaining_open: remaining_open,
           expected_today: expected_today,
           elapsed_days:   elapsed_avail,
@@ -481,6 +474,31 @@ module CapacityManagement
 
     def closed_wps(wps)
       wps.select { |wp| wp.status&.is_closed? }
+    end
+
+    def remaining_hours_for(wps)
+      wps.sum { |wp| remaining_hours_for_wp(wp) }.to_f
+    end
+
+    def completed_hours_for(wps)
+      wps.sum { |wp| completed_hours_for_wp(wp) }.to_f
+    end
+
+    def remaining_hours_for_wp(wp)
+      return 0.0 if wp.status&.is_closed?
+
+      remaining = wp.remaining_hours.to_f
+      estimate = wp.estimated_hours.to_f
+      return remaining if remaining.positive?
+
+      estimate
+    end
+
+    def completed_hours_for_wp(wp)
+      estimate = wp.estimated_hours.to_f
+      remaining = remaining_hours_for_wp(wp)
+
+      [(estimate - remaining), 0.0].max
     end
 
     def team_logged_hours
